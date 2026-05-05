@@ -1,0 +1,18 @@
+{
+  "description": "Local-first wardrobe app that learns your sense of temperature, aesthetic, and occasion — then suggests outfits from your own closet, including combos you'd never have tried yourself. Three-stage XGBoost pipeline + 11-table SQLite schema, no cloud, no account.",
+  "homepage": "https://chentzuyuan.github.io/closetmind.html",
+  "topics": [
+    "wardrobe",
+    "outfit-recommendation",
+    "machine-learning",
+    "xgboost",
+    "fastapi",
+    "sqlite",
+    "sqlalchemy",
+    "local-first",
+    "personal-database",
+    "desktop-app",
+    "pyinstaller",
+    "recommender-system"
+  ]
+}

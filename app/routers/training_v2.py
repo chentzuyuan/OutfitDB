@@ -179,7 +179,16 @@ class TempBatchSubmit(BaseModel):
 
 
 def _zone_stats(db: Session, user_id: int) -> dict:
-    """Per-zone training stats: total ratings & target_zone breakdown."""
+    """Per-zone training stats: total ratings & target_zone breakdown.
+
+    A rating contributes to a zone's `total` whenever the rating *touches*
+    that zone — either because the system sampled the outfit for that
+    target_zone, OR because the user explicitly marked the outfit as
+    suitable for that zone (zones_ok). This matches the user's intuition
+    that clicking "cold" on N outfits should make the cold-zone progress
+    bar grow by N, not stay at 0 just because the system happened to be
+    probing a different target_zone for those batches.
+    """
     rows = (
         db.query(models.TemperatureRating)
         .filter(models.TemperatureRating.user_id == user_id)
@@ -192,17 +201,20 @@ def _zone_stats(db: Session, user_id: int) -> dict:
         "warmth_rejected": [],
     } for z in models.TEMP_ZONE_KEYS}
     for r in rows:
-        # Count this rating against its target_zone (the zone we sampled it for)
         tz = r.target_zone or "mild"
-        if tz in stats:
-            stats[tz]["total"] += 1
-            outfit = db.get(models.Outfit, r.outfit_id)
-            warmth = float(outfit.warmth_score or 0) if outfit else 0
-            if tz in (r.zones_ok or []):
-                stats[tz]["accepted_for_zone"] += 1
-                stats[tz]["warmth_accepted"].append(warmth)
+        zoks = set(r.zones_ok or [])
+        # Touched = zones the rating gives a signal for: target zone (so
+        # the adaptive sampler still drives coverage) ∪ user-marked zones.
+        touched = zoks | ({tz} if tz in stats else set())
+        outfit = db.get(models.Outfit, r.outfit_id)
+        warmth = float(outfit.warmth_score or 0) if outfit else 0
+        for z in touched:
+            stats[z]["total"] += 1
+            if z in zoks:
+                stats[z]["accepted_for_zone"] += 1
+                stats[z]["warmth_accepted"].append(warmth)
             else:
-                stats[tz]["warmth_rejected"].append(warmth)
+                stats[z]["warmth_rejected"].append(warmth)
     return stats
 
 

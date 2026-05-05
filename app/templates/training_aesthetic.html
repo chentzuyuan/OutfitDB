@@ -66,7 +66,8 @@ function renderBatch() {
         const itemsHtml = o.items.map(oi => {
             const it = oi.item;
             const img = it && it.image_path ? `<img src="${it.image_path}" alt="${it.name}" />` : `<div class="noimg-mini"></div>`;
-            return `<div class="mini">${img}<div class="mini-name">${it ? it.name : '#' + oi.item_id}</div></div>`;
+            const fullName = it ? it.name : '#' + oi.item_id;
+            return `<div class="mini" title="${fullName.replace(/"/g, '&quot;')}">${img}<div class="mini-name">${fullName}</div></div>`;
         }).join('');
         const card = document.createElement('div');
         card.className = 'train-outfit-card';
@@ -100,21 +101,43 @@ function renderBatch() {
 function updateSubmit() {
     const total = currentBatch.outfits.length;
     document.getElementById('filledInfo').textContent = `${answers.size} / ${total}`;
-    document.getElementById('submitBtn').disabled = answers.size < total;
+    // Allow submit as soon as the user has rated at least one outfit.
+    // Earlier the button stayed disabled until ALL outfits were rated;
+    // a single missed click left the user staring at a "submit" button
+    // that wouldn't fire and no hint why.
+    document.getElementById('submitBtn').disabled = answers.size === 0;
 }
 
 async function submitBatch() {
+    const btn = document.getElementById('submitBtn');
     const ratings = [...answers.entries()].map(([outfit_id, rating]) => ({outfit_id, rating}));
-    const r = await fetch('/training/v2/aesthetic/submit', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ratings}),
-    });
-    if (r.ok) {
+    if (ratings.length === 0) return;
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = window.t ? window.t('train2.aes.submitting') || '送出中…' : '送出中…';
+    try {
+        const r = await fetch('/training/v2/aesthetic/submit', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ratings}),
+        });
+        if (!r.ok) {
+            const detail = await r.text().catch(() => `HTTP ${r.status}`);
+            console.error('[aesthetic submit] failed:', detail);
+            alert(`Submit failed (HTTP ${r.status}). See console for detail.`);
+            btn.disabled = false;
+            btn.textContent = original;
+            return;
+        }
         currentBatch = null;
         answers.clear();
         document.getElementById('batchPanel').style.display = 'none';
         document.getElementById('introPanel').style.display = '';
         await refreshProgress();
+    } catch (e) {
+        console.error('[aesthetic submit] network error:', e);
+        alert('Submit failed (network). See console for detail.');
+        btn.disabled = false;
+        btn.textContent = original;
     }
 }
 

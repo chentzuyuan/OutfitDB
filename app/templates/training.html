@@ -128,7 +128,8 @@ function renderBatch() {
             const img = it && it.image_path
                 ? `<img src="${it.image_path}" alt="${it.name}" />`
                 : `<div class="noimg-mini"></div>`;
-            return `<div class="mini">${img}<div class="mini-name">${it ? it.name : '#' + oi.item_id}</div></div>`;
+            const fullName = it ? it.name : '#' + oi.item_id;
+            return `<div class="mini" title="${fullName.replace(/"/g, '&quot;')}">${img}<div class="mini-name">${fullName}</div></div>`;
         }).join('');
         card.innerHTML = `
             <div class="train-outfit-items">${itemsHtml}</div>

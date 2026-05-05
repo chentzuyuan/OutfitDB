@@ -28,3 +28,20 @@ services:
       # exactly what we want for "every visitor sees a clean wardrobe".
       - key: CLOSETMIND_PROFILES_ROOT
         value: "/tmp/closetmind/profiles"
+    # Don't burn a Render free-tier build cycle (~5 min) on commits that
+    # only touch documentation, GitHub housekeeping, or the macOS DMG
+    # build pipeline. Anything in app/, the seed wardrobe, requirements,
+    # or render.yaml itself is still a real change and triggers a deploy.
+    buildFilter:
+      ignoredPaths:
+        - README.md
+        - LICENSE
+        - "*.md"
+        - "docs/**"
+        - ".github/**"
+        - ".gitignore"
+        - "tools/build_app.py"
+        - "tools/make_dmg.py"
+        - "tools/make_icons.py"
+        - "closetmind.spec"
+        - "BUILD.md"

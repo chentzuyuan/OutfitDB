@@ -4,13 +4,21 @@
 > aesthetic, and *your* sense of occasion. Suggests outfits from your own
 > closet — including combinations you'd never have thought of yourself.
 
-| Try it | Download | Source / docs |
-|---|---|---|
-| 🌐 [**Live demo &rarr;**](https://closetmind.onrender.com/) <br>(Render free tier; first visit ~50 s cold-start) | [**macOS DMG**](https://github.com/chentzuyuan/ClosetMind_App/releases/download/v0.1.0/ClosetMind-0.1.0.dmg) (95 MB) <br>[**Windows ZIP**](https://github.com/chentzuyuan/ClosetMind_App/releases/download/v0.1.0/ClosetMind-0.1.0-windows.zip) (210 MB) | [**Landing page**](https://chentzuyuan.github.io/closetmind.html) <br>[**Architecture doc**](docs/ClosetMind_Documentation.docx) |
+[![Try the live demo](https://img.shields.io/badge/%F0%9F%8C%90%20Try%20live-closetmind.onrender.com-22c55e?style=for-the-badge)](https://closetmind.onrender.com/)
+[![Download for macOS](https://img.shields.io/badge/macOS-95%20MB-111?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/chentzuyuan/ClosetMind_App/releases/download/v0.1.0/ClosetMind-0.1.0.dmg)
+[![Download for Windows](https://img.shields.io/badge/Windows-210%20MB-0078d4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/chentzuyuan/ClosetMind_App/releases/download/v0.1.0/ClosetMind-0.1.0-windows.zip)
+[![Landing page](https://img.shields.io/badge/Landing%20page-chentzuyuan.github.io-555?style=for-the-badge)](https://chentzuyuan.github.io/closetmind.html)
 
-The desktop builds ship a *Tester* profile pre-seeded with 54 sample items
-so you can click around the recommendation flow on first launch without
-having to upload your own clothes first.
+The **試用版 (Try live)** button hits the full FastAPI backend on Render's
+free tier, pre-seeded with the *Tester* sample wardrobe so you can click
+through the recommendation flow with no install. First visit takes ~50 s
+while the container wakes up; subsequent loads are instant. Each cold
+boot wipes the state and re-seeds Tester, so the demo always returns to
+a clean wardrobe.
+
+The macOS / Windows desktop builds ship the same Tester profile bundled
+inside the binary, so the local app is also usable on first launch
+without uploading anything.
 
 ## Why this exists
 

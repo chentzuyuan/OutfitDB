@@ -12,14 +12,21 @@ Paste these values:
 **Description**
 
 ```
-Local-first wardrobe app that learns your sense of temperature, aesthetic, and occasion — then suggests outfits from your own closet, including combos you'd never have tried yourself. Three-stage XGBoost pipeline + 11-table SQLite schema, no cloud, no account.
+🌐 Try live: closetmind.onrender.com — Local-first wardrobe app that learns your sense of temperature, aesthetic, and occasion, then suggests outfits from your own closet (incl. combos you'd never have tried). Three-stage XGBoost + 11-table SQLite, no cloud, no account.
 ```
 
 **Website**
 
 ```
-https://chentzuyuan.github.io/closetmind.html
+https://closetmind.onrender.com/
 ```
+
+Putting the live-demo URL here (instead of the landing page on
+chentzuyuan.github.io) makes the GitHub repo page itself a
+one-click trial — anyone who finds the project sees "Try live: …"
+right in the description and can hit the demo from the sidebar
+without leaving GitHub. The landing page is still linked from the
+README badge row; nothing is lost.
 
 **Topics** (comma-separated; GitHub will validate them)
 
@@ -28,9 +35,6 @@ wardrobe, outfit-recommendation, machine-learning, xgboost, fastapi,
 sqlite, sqlalchemy, local-first, personal-database, desktop-app,
 pyinstaller, recommender-system
 ```
-
-Tick **"Use your GitHub Pages website"** if it offers; that's the
-chentzuyuan.github.io homepage URL above.
 
 Click **Save changes**.
 

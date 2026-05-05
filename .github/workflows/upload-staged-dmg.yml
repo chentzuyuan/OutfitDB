@@ -1,0 +1,62 @@
+name: upload-staged-dmg
+
+# One-shot helper for uploading a Mac DMG to a tagged Release without a
+# Mac build runner. Push the DMG to a `release-staging-<tag>` branch
+# (e.g. `release-staging-v0.1.1`); this workflow finds the matching
+# release on the same repo and uploads every .dmg in the branch to it.
+#
+# After upload completes the workflow deletes the staging branch so
+# the 95 MB DMG doesn't sit in main's history. Idempotent: re-running
+# overwrites existing assets via `gh release upload --clobber`.
+#
+# Long-term we'd rather build the DMG on a macos-latest runner — but
+# that's a 5-min rebuild every tag, so the staging-branch path is the
+# fast lane for "I already have the DMG locally" cases.
+on:
+  push:
+    branches:
+      - 'release-staging-*'
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag from branch name
+        id: tag
+        run: |
+          BR="${GITHUB_REF#refs/heads/}"
+          TAG="${BR#release-staging-}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Tag resolved: $TAG"
+
+      - name: Locate DMG file
+        id: dmg
+        run: |
+          DMG=$(ls *.dmg 2>/dev/null | head -1)
+          if [ -z "$DMG" ]; then
+            echo "::error::No .dmg file at the root of branch ${GITHUB_REF}"
+            exit 1
+          fi
+          echo "file=$DMG" >> "$GITHUB_OUTPUT"
+          echo "Found DMG: $DMG ($(du -sh "$DMG" | cut -f1))"
+
+      - name: Upload DMG to the matching release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.tag.outputs.tag }}" "${{ steps.dmg.outputs.file }}" --clobber
+          echo "Uploaded ${{ steps.dmg.outputs.file }} → release ${{ steps.tag.outputs.tag }}"
+
+      - name: Self-delete the staging branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BR="${GITHUB_REF#refs/heads/}"
+          gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/$BR"
+          echo "Deleted staging branch $BR"

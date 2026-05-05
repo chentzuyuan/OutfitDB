@@ -3,7 +3,10 @@ services:
     name: closetmind
     runtime: python
     plan: free
-    rootDir: closetmind
+    # No rootDir: this repo IS the closetmind project (app/, requirements.txt
+    # at the top level). The earlier render.yaml was written for a parent
+    # super-repo with a closetmind/ subfolder; here Render should treat the
+    # repo root as the project root.
     buildCommand: pip install -r requirements.txt
     # Bind to 0.0.0.0:$PORT so Render's reverse proxy can reach it.
     # No --workers flag: free tier has 512MB RAM and a single uvicorn

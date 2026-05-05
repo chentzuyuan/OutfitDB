@@ -706,8 +706,8 @@ const TRANSLATIONS = {
         // Common form labels
         'form.date': 'Date',
         'form.temperature': 'Temperature (°C)',
-        'form.temperature_high': 'Day high',
-        'form.temperature_low': 'Night low',
+        'form.temperature_high': 'Daily high',
+        'form.temperature_low': 'Nightly low',
         'form.weather': 'Weather',
         'form.occasion': 'Occasion',
         'form.notes': 'Notes',

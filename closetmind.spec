@@ -145,12 +145,12 @@ if sys.platform == "darwin":
         name="ClosetMind.app",
         icon=None,        # TODO: add app/static/icons/icon-512.png as .icns
         bundle_identifier="com.closetmind.app",
-        version="0.1.0",
+        version="0.1.1",
         info_plist={
             "CFBundleName": "ClosetMind",
             "CFBundleDisplayName": "ClosetMind",
-            "CFBundleVersion": "0.1.0",
-            "CFBundleShortVersionString": "0.1.0",
+            "CFBundleVersion": "0.1.1",
+            "CFBundleShortVersionString": "0.1.1",
             "NSHighResolutionCapable": True,
             # Don't auto-show the Python window; we use the system browser
             # for the actual UI. The terminal output is for debugging.

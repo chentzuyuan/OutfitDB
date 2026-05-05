@@ -212,15 +212,24 @@ def ensure_data_dir_structure(data_dir: Path) -> None:
 
 
 def is_setup_complete() -> bool:
-    """The user has finished onboarding when they own at least one
-    profile that isn't the bundled Tester sample. Tester is a demo
-    wardrobe shipped with the .app — its sole presence shouldn't skip
-    the welcome flow. Cloud deployments (Render etc.) bypass via env."""
+    """Three independent ways to count onboarding as done:
+
+      1. DATABASE_URL set — legacy cloud-Postgres mode.
+      2. RENDER_MODE set and the Tester sample is present — Render
+         demo deploy: Tester is the *intended* active profile, not a
+         placeholder, so don't gate the app behind /setup.
+      3. The user owns at least one non-Tester profile — desktop
+         install: they've gone through /setup or imported their own
+         wardrobe. Tester being the only profile means the user is
+         on first-launch and hasn't picked anything yet.
+    """
     if os.getenv("DATABASE_URL"):
         return True
     profiles = list_profiles()
     if not profiles:
         return False
+    if RENDER_MODE:
+        return any(p["name"] == "Tester" for p in profiles)
     return any(p["name"] != "Tester" for p in profiles)
 
 

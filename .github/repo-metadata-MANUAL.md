@@ -12,7 +12,7 @@ Paste these values:
 **Description**
 
 ```
-🌐 Try live: closetmind.onrender.com — Local-first wardrobe app that learns your sense of temperature, aesthetic, and occasion, then suggests outfits from your own closet (incl. combos you'd never have tried). Three-stage XGBoost + 11-table SQLite, no cloud, no account.
+Try live: closetmind.onrender.com — Local-first wardrobe app that learns your sense of temperature, aesthetic, and occasion, then suggests outfits from your own closet (incl. combos you'd never have tried). Three-stage XGBoost + 11-table SQLite, no cloud, no account.
 ```
 
 **Website**

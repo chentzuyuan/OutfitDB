@@ -4,13 +4,13 @@
 > aesthetic, and *your* sense of occasion. Suggests outfits from your own
 > closet — including combinations you'd never have thought of yourself.
 
-[![Try the live demo](https://img.shields.io/badge/%F0%9F%8C%90%20Try%20live-closetmind.onrender.com-22c55e?style=for-the-badge)](https://closetmind.onrender.com/)
-[![Download for macOS](https://img.shields.io/badge/macOS-95%20MB-111?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/chentzuyuan/ClosetMind_App/releases/download/v0.1.0/ClosetMind-0.1.0.dmg)
-[![Download for Windows](https://img.shields.io/badge/Windows-210%20MB-0078d4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/chentzuyuan/ClosetMind_App/releases/download/v0.1.0/ClosetMind-0.1.0-windows.zip)
+[![Try live](https://img.shields.io/badge/Try%20live-closetmind.onrender.com-22c55e?style=for-the-badge)](https://closetmind.onrender.com/)
+[![Download for macOS](https://img.shields.io/badge/macOS-95%20MB-111?style=for-the-badge)](https://github.com/chentzuyuan/ClosetMind_App/releases/download/v0.1.0/ClosetMind-0.1.0.dmg)
+[![Download for Windows](https://img.shields.io/badge/Windows-210%20MB-0078d4?style=for-the-badge)](https://github.com/chentzuyuan/ClosetMind_App/releases/download/v0.1.0/ClosetMind-0.1.0-windows.zip)
 [![Landing page](https://img.shields.io/badge/Landing%20page-chentzuyuan.github.io-555?style=for-the-badge)](https://chentzuyuan.github.io/closetmind.html)
 
-The **試用版 (Try live)** button hits the full FastAPI backend on Render's
-free tier, pre-seeded with the *Tester* sample wardrobe so you can click
+The **Try live** button hits the full FastAPI backend on Render's free
+tier, pre-seeded with the *Tester* sample wardrobe so you can click
 through the recommendation flow with no install. First visit takes ~50 s
 while the container wakes up; subsequent loads are instant. Each cold
 boot wipes the state and re-seeds Tester, so the demo always returns to

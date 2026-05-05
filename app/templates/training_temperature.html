@@ -44,13 +44,35 @@ const ZONES = [
 ];
 
 function zoneRange(z) {
-    return (window.getTempUnit && window.getTempUnit() === 'F') ? z.range_f : z.range_c;
+    // temp_unit.js exposes window.cm.tempUnit() — returns 'F' or 'C'.
+    // Falsy if the script hasn't loaded yet (shouldn't happen in
+    // practice; base.html includes it before this template) — default
+    // to °C so we don't blank out the label.
+    const u = (window.cm && window.cm.tempUnit) ? window.cm.tempUnit() : 'C';
+    return u === 'F' ? z.range_f : z.range_c;
 }
 
 function zoneLabel(z) {
     const isEN = window.getLang && window.getLang() === 'en';
     return `${isEN ? z.label_en : z.label_zh} (${zoneRange(z)})`;
 }
+
+// First-visit race condition fix:
+// temp_unit.js bootstraps the localStorage cm_temp_unit by async-
+// fetching /users/settings on page load, then dispatches
+// 'cm-temp-unit-change' on window when it actually had to switch
+// (e.g., user record says 'F' but localStorage was empty). If our
+// progress + buttons already rendered with °C, we redo them now.
+window.addEventListener('cm-temp-unit-change', () => {
+    refreshProgress();
+    if (currentBatch) renderBatch();
+    // Re-render the target-zone header too, if a batch is mid-flight.
+    const tzEl = document.getElementById('targetZone');
+    if (tzEl && currentBatch) {
+        const tz = ZONES.find(z => z.key === currentBatch.target_zone);
+        if (tz) tzEl.textContent = `${currentBatch.target_zone} (${zoneRange(tz)})`;
+    }
+});
 
 let currentBatch = null;
 const answers = new Map();  // outfit_id -> Set of zone keys

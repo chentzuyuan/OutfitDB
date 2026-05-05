@@ -1,19 +1,46 @@
 # ClosetMind
 
-A local-first wardrobe + outfit recommender. Combines a hand-coded
-**Layer Coverage Model** (温度層次 / 美感層次 dual curves) with a
-**three-stage learned classifier chain** (temperature × occasion × aesthetic)
-so recommendations adapt to *your* wardrobe, *your* climate, and *your* taste —
-without sending any data off your machine.
+> A local-first wardrobe app that learns *your* sense of temperature, *your*
+> aesthetic, and *your* sense of occasion. Suggests outfits from your own
+> closet — including combinations you'd never have thought of yourself.
+
+| Try it | Download | Source / docs |
+|---|---|---|
+| 🌐 [**Live demo &rarr;**](https://closetmind.onrender.com/) <br>(Render free tier; first visit ~50 s cold-start) | [**macOS DMG**](https://github.com/chentzuyuan/ClosetMind_App/releases/download/v0.1.0/ClosetMind-0.1.0.dmg) (95 MB) <br>[**Windows ZIP**](https://github.com/chentzuyuan/ClosetMind_App/releases/download/v0.1.0/ClosetMind-0.1.0-windows.zip) (210 MB) | [**Landing page**](https://chentzuyuan.github.io/closetmind.html) <br>[**Architecture doc**](docs/ClosetMind_Documentation.docx) |
+
+The desktop builds ship a *Tester* profile pre-seeded with 54 sample items
+so you can click around the recommendation flow on first launch without
+having to upload your own clothes first.
+
+## Why this exists
+
+ClosetMind is the first of a planned series of small desktop apps that
+demonstrate how **anyone can build their own database and train their own
+ML model for everyday problems that don't have a tidy mathematical
+answer**. "What should I wear today?" combines temperature, aesthetic,
+and occasion in ways that resist a closed-form solution — but with a
+relational schema for your wardrobe, three short rating flows, and a
+classifier per axis, the problem becomes tractable on a laptop with no
+cloud, no account, and no telemetry.
+
+It's deliberately *teach-by-doing*: an 11-table SQLite schema, a
+three-stage XGBoost pipeline, a layer-coverage thermal model, and an
+auto-update flow are all here in one repo small enough to read
+end-to-end.
+
+## How recommendations work
 
 ```
 warmth check  ─×─  occasion check  ─×─  aesthetic preference  ─→  Top K outfits
    (XGBoost)        (XGBoost)              (XGBoost)
 ```
 
-Each gate is independently learnable from its own pure-axis training UI, so
-"great look but wrong temperature" never gets cross-contaminated into either
-signal.
+Each gate is independently learnable from its own pure-axis training UI,
+so "great look but wrong temperature" never cross-contaminates into the
+other signals. A hand-coded **Layer Coverage Model** (温度層次 / 美感層次
+dual curves) sits in front of the chain to enforce physical validity (no
+orphan outerwear, warmth within `[0.6×, 1.5×] × ideal`, formality floor
+for the occasion) before the learners ever see a candidate.
 
 ---
 
@@ -36,11 +63,18 @@ External services (all optional):
 
 ## Install
 
+For most people the easiest path is the prebuilt desktop bundle —
+[**macOS DMG**](https://github.com/chentzuyuan/ClosetMind_App/releases/download/v0.1.0/ClosetMind-0.1.0.dmg)
+or [**Windows ZIP**](https://github.com/chentzuyuan/ClosetMind_App/releases/download/v0.1.0/ClosetMind-0.1.0-windows.zip),
+both ship with a *Tester* sample wardrobe so the app is usable on
+first launch without any setup.
+
+To run from source instead:
+
 ```bash
 # 1. Get the code
-git clone <your-repo>/closetmind.git
-# or unzip a release archive
-cd closetmind
+git clone https://github.com/chentzuyuan/ClosetMind.git
+cd ClosetMind
 
 # 2. Create a fresh virtualenv
 python3.12 -m venv .venv
@@ -54,9 +88,13 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Then open **http://127.0.0.1:8000** in your browser. First-run will redirect
-to `/setup` — pick a folder for your data (defaults to `~/MyClosetMind/`),
-then start uploading clothes.
+Then open **http://127.0.0.1:8000** in your browser. First-run will
+redirect to `/setup` — either accept the default data folder
+(`~/MyClosetMind/`) and create your own profile, or click
+**"Try the sample wardrobe (Tester)"** to start with the bundled
+54-item closet. Tester is also seeded automatically into the data
+folder if you launch from the prebuilt `.app` / `.exe`, so you can
+swap into it from the top-right profile switcher any time.
 
 ---
 
@@ -82,27 +120,27 @@ then start uploading clothes.
 
 ---
 
-## Demo data (optional)
+## Demo data (Tester)
 
-The repo ships with a 54-item demo wardrobe spec under `tools/demo_data/`.
-To populate the Tester profile with the same data used in the documentation:
+A populated `Tester` profile (54 items, photos, trained model, full
+wardrobe.db) is committed to this repo at `seed_profiles/Tester/` and
+gets copied into your data folder automatically:
 
-```bash
-# 1. Create the Tester profile via /setup or via API
-curl -X POST http://127.0.0.1:8000/setup -H "Content-Type: application/json" \
-     -d '{"name": "Tester", "data_dir": "~/MyClosetMind"}'
+- **Prebuilt `.app` / `.exe`**: bundled inside the binary; the app
+  copies it on first launch into the OS-standard data directory
+  (`~/Library/Application Support/ClosetMind/profiles/Tester` on
+  macOS, `%APPDATA%\ClosetMind\profiles\Tester` on Windows).
+- **Render demo**: copied into `/tmp/closetmind/profiles/Tester` on
+  every cold start, so each visitor gets a fresh wardrobe.
+- **Run from source**: copy `seed_profiles/Tester/` into your
+  `~/MyClosetMind/Tester/` (or the data directory you picked at
+  `/setup`) before first launch — the app picks it up automatically.
 
-# 2. Generate placeholder images, import items, attach photos
-python -m tools.demo_data.import_main_wardrobe
-python -m tools.demo_data.import_sport_casual
-python -m tools.demo_data.import_cold_formal
-python -m tools.demo_data.import_tuxedo_split
-python -m tools.demo_data.import_white_tee
-```
-
-Note: the import scripts use Pillow placeholders for images; replacing them
-with real product photos is up to you (or the LLM-driven DALL-E flow we
-used in development — see `docs/ClosetMind_Documentation.docx` §6).
+If you want to *generate* the Tester wardrobe from scratch (e.g., to
+tweak the spec and re-seed with new photos), the original importers
+still live under `tools/demo_data/` &mdash;
+`spec_*.json` defines the 54 items, `import_*.py` writes them to the
+DB, and `make_*.py` produces Pillow placeholder photos.
 
 ---
 

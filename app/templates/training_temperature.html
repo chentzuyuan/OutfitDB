@@ -28,18 +28,28 @@
 {% endblock %}
 {% block scripts %}
 <script>
+// Each zone carries both °C and °F range strings so we can honour the
+// user's temp_unit preference (set on /settings, persisted in
+// localStorage as cm_temp_unit). The °F bands are exact conversions of
+// the °C boundaries (32 / 50 / 64.4 / 77 / 86 °F), rounded to whole
+// degrees for readability — same width as the corresponding C zone, so
+// classification semantics don't change.
 const ZONES = [
-    {key: 'subzero', range: '<0°C',    label_zh: '冰寒',  label_en: 'Subzero'},
-    {key: 'cold',    range: '0–10°C',  label_zh: '冷',    label_en: 'Cold'},
-    {key: 'cool',    range: '10–18°C', label_zh: '涼',    label_en: 'Cool'},
-    {key: 'mild',    range: '18–25°C', label_zh: '溫',    label_en: 'Mild'},
-    {key: 'warm',    range: '25–30°C', label_zh: '暖',    label_en: 'Warm'},
-    {key: 'hot',     range: '>30°C',   label_zh: '熱',    label_en: 'Hot'},
+    {key: 'subzero', range_c: '<0°C',    range_f: '<32°F',     label_zh: '冰寒',  label_en: 'Subzero'},
+    {key: 'cold',    range_c: '0–10°C',  range_f: '32–50°F',   label_zh: '冷',    label_en: 'Cold'},
+    {key: 'cool',    range_c: '10–18°C', range_f: '50–64°F',   label_zh: '涼',    label_en: 'Cool'},
+    {key: 'mild',    range_c: '18–25°C', range_f: '64–77°F',   label_zh: '溫',    label_en: 'Mild'},
+    {key: 'warm',    range_c: '25–30°C', range_f: '77–86°F',   label_zh: '暖',    label_en: 'Warm'},
+    {key: 'hot',     range_c: '>30°C',   range_f: '>86°F',     label_zh: '熱',    label_en: 'Hot'},
 ];
+
+function zoneRange(z) {
+    return (window.getTempUnit && window.getTempUnit() === 'F') ? z.range_f : z.range_c;
+}
 
 function zoneLabel(z) {
     const isEN = window.getLang && window.getLang() === 'en';
-    return `${isEN ? z.label_en : z.label_zh} (${z.range})`;
+    return `${isEN ? z.label_en : z.label_zh} (${zoneRange(z)})`;
 }
 
 let currentBatch = null;
@@ -90,7 +100,12 @@ async function startBatch() {
         }
         currentBatch = r;
         answers.clear();
-        document.getElementById('targetZone').textContent = `${r.target_zone} (${r.target_zone_range})`;
+        // Ignore the backend's target_zone_range (always rendered as °C)
+        // and look up our own per-unit string so the header matches the
+        // zone-button text below.
+        const tz = ZONES.find(z => z.key === r.target_zone);
+        const tzRange = tz ? zoneRange(tz) : (r.target_zone_range || '');
+        document.getElementById('targetZone').textContent = `${r.target_zone} (${tzRange})`;
         renderBatch();
         document.getElementById('introPanel').style.display = 'none';
         document.getElementById('batchPanel').style.display = '';

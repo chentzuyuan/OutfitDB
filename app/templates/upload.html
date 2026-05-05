@@ -3,6 +3,15 @@
 {% block content %}
 <h1 data-i18n="upload.title">上傳衣物</h1>
 
+<!-- Power-user shortcut for visitors who already have their whole
+     closet in a spreadsheet. Sits at the entry of the upload flow so
+     people don't slog through 20-photo batches if a CSV import would
+     finish in seconds. -->
+<a class="bulk-cta" href="/import">
+    <span data-i18n="upload.bulk_cta_lead">太多衣服嗎？</span>
+    <span class="bulk-cta-action" data-i18n="upload.bulk_cta_action">點這裡批量上傳 (CSV) &rarr;</span>
+</a>
+
 <section class="panel">
     <p style="color:#666;" data-i18n="upload.batch_intro">一次選最多 20 張照片，下方每列點選屬性即可。名稱會自動組成，可以點開來改。</p>
     <div class="upload-pick-row">

@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+{% block title %}ClosetMind · 設定{% endblock %}
+{% block content %}
+<h1 data-i18n="settings.title">設定</h1>
+
+<section class="panel">
+    <h2 data-i18n="settings.location_h2">位置（用於自動天氣）</h2>
+    <p style="color:#666;" data-i18n="settings.location_desc">設定一次後，每次建情境會自動抓今日天氣（瀏覽器直接打 Open-Meteo，不經過後端）。</p>
+
+    <div id="currentInfo" style="margin:10px 0;color:#555;font-size:0.95rem;"></div>
+
+    <div class="toolbar" style="margin-top:14px;">
+        <button class="btn" id="quickBtn" data-i18n="settings.quick_btn">定位 + 儲存 + 測試天氣</button>
+    </div>
+
+    <!-- Search by ZIP / city / address — calls Nominatim client-side -->
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid #eee;">
+        <label style="display:block;font-size:0.9rem;color:#555;margin-bottom:4px;" data-i18n="settings.search_label">輸入城市 / 郵遞區號 / 地址</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <input id="searchInput" type="text" data-i18n-attr="placeholder:settings.search_ph"
+                placeholder="台中市 / 台北市信義區 / 高雄 802"
+                style="flex:1;padding:8px 10px;border:1px solid #ccc;border-radius:6px;font-size:0.95rem;" />
+            <button class="btn" id="searchBtn" data-i18n="settings.search_btn">搜尋</button>
+        </div>
+        <div id="searchResults" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;"></div>
+        <div id="searchStatus" style="margin-top:6px;color:#888;font-size:0.85rem;"></div>
+    </div>
+
+    <details id="manualPanel" style="margin-top:16px;">
+        <summary style="cursor:pointer;color:#555;font-size:0.9rem;" data-i18n="settings.manual_summary">手動輸入座標（進階）</summary>
+        <div class="grid" style="margin-top:10px;">
+            <label><span data-i18n="settings.lat">緯度</span> <input id="lat" type="number" step="0.000001" /></label>
+            <label><span data-i18n="settings.lon">經度</span> <input id="lon" type="number" step="0.000001" /></label>
+            <label><span data-i18n="settings.city">城市顯示名</span> <input id="city" /></label>
+            <label><span data-i18n="settings.tz">時區</span> <input id="timezone" /></label>
+        </div>
+        <button class="btn secondary" id="manualBtn" style="margin-top:10px;" data-i18n="settings.manual_btn">用手動輸入的座標儲存</button>
+    </details>
+
+    <pre id="result" class="result" style="margin-top:10px;"></pre>
+</section>
+
+<section class="panel">
+    <h2 data-i18n="settings.unit_h2">溫度單位</h2>
+    <p style="color:#666;" data-i18n="settings.unit_desc">資料庫永遠儲存攝氏,這個只影響介面上顯示和輸入時用什麼單位。</p>
+    <div class="toolbar" style="margin-top:8px;gap:14px;">
+        <label style="display:flex;align-items:center;gap:6px;">
+            <input type="radio" name="tempUnit" value="C" id="tempUnitC" /> °C
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;">
+            <input type="radio" name="tempUnit" value="F" id="tempUnitF" /> °F
+        </label>
+        <span id="tempUnitStatus" style="color:#888;font-size:0.85rem;"></span>
+    </div>
+</section>
+
+<section class="panel">
+    <h2 data-i18n="settings.dataDir_h2">資料夾位置</h2>
+    <div id="dataDirInfo" style="font-family:monospace;color:#555;">…</div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/weather.js"></script>
+<script>
+async function loadSettings() {
+    const s = await fetch('/users/settings').then(r => r.json());
+    if (s.lat != null) document.getElementById('lat').value = s.lat;
+    if (s.lon != null) document.getElementById('lon').value = s.lon;
+    if (s.city) document.getElementById('city').value = s.city;
+    if (s.timezone) document.getElementById('timezone').value = s.timezone;
+    // Temperature unit radio
+    const unit = (s.temp_unit === 'F') ? 'F' : 'C';
+    const r = document.querySelector(`input[name="tempUnit"][value="${unit}"]`);
+    if (r) r.checked = true;
+    // Persist into localStorage so other pages (recommendation/training)
+    // can render in the chosen unit without an extra round-trip.
+    try { localStorage.setItem('cm_temp_unit', unit); } catch (e) {}
+
+    const info = document.getElementById('currentInfo');
+    if (s.lat != null && s.lon != null) {
+        const cityPart = s.city ? `${s.city} · ` : '';
+        const tzPart = s.timezone ? ` · ${s.timezone}` : '';
+        info.innerHTML = `${t('settings.current_location')}：<b>${cityPart}lat ${s.lat.toFixed(4)}, lon ${s.lon.toFixed(4)}</b>${tzPart}`;
+    } else {
+        info.innerHTML = `<span style="color:#c66;">${t('settings.no_location_warn')}</span>`;
+    }
+
+    const status = await fetch('/setup/status').then(r => r.json());
+    const dd = document.getElementById('dataDirInfo');
+    if (status.active && status.profiles_root) {
+        dd.innerHTML = `${status.profiles_root}/<b>${status.active}</b>` +
+            `<div style="color:#888;font-size:0.85rem;margin-top:4px;">` +
+            `${status.profile_count} profile${status.profile_count === 1 ? '' : 's'} · ` +
+            `setup ${status.setup_complete ? '✓' : '×'}</div>`;
+    } else {
+        dd.textContent = t('settings.not_initialized');
+    }
+}
+
+function setLog(text) {
+    document.getElementById('result').textContent = text;
+}
+
+async function saveSettings() {
+    const body = {
+        lat: parseFloat(document.getElementById('lat').value) || null,
+        lon: parseFloat(document.getElementById('lon').value) || null,
+        city: document.getElementById('city').value || null,
+        timezone: document.getElementById('timezone').value || null,
+    };
+    const res = await fetch('/users/settings', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    return await res.json();
+}
+
+async function testWeather() {
+    const lat = parseFloat(document.getElementById('lat').value);
+    const lon = parseFloat(document.getElementById('lon').value);
+    if (isNaN(lat) || isNaN(lon)) return null;
+    return await window.fetchWeather(lat, lon, new Date().toISOString());
+}
+
+function getCurrentPositionAsync() {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) return reject(new Error('Browser does not support geolocation'));
+        navigator.geolocation.getCurrentPosition(resolve, reject,
+            { enableHighAccuracy: true, timeout: 10000 });
+    });
+}
+
+// GeolocationPositionError stringifies to "[object GeolocationPositionError]"
+// which is useless. Translate the error code into actionable guidance.
+function describeGeoError(err) {
+    if (!err) return 'Unknown error';
+    const isEN = window.getLang && window.getLang() === 'en';
+    // Plain Error from our own throw above
+    if (err.message && !err.code) return err.message;
+    // GeolocationPositionError codes: 1 = PERMISSION_DENIED, 2 = POSITION_UNAVAILABLE, 3 = TIMEOUT
+    const c = err.code;
+    if (c === 1) {
+        return isEN
+            ? 'Browser blocked geolocation. On Safari: Develop → Disable Restrictions → ☐ Disable JavaScript Geolocation, or just use Manual coordinates below.'
+            : '瀏覽器拒絕定位。Safari 需要在「開發 → 停用限制」裡關掉「停用 JavaScript 定位」,或直接用下面的手動座標。';
+    }
+    if (c === 2) {
+        return isEN
+            ? 'Location unavailable (no GPS / network signal). Use Manual coordinates below.'
+            : '取不到位置資訊(GPS / 網路訊號不足)。請改用下面的手動座標。';
+    }
+    if (c === 3) {
+        return isEN
+            ? 'Geolocation timed out. Try again or use Manual coordinates.'
+            : '定位逾時。再試一次或改用手動座標。';
+    }
+    return (err.message || `code ${c}`);
+}
+
+function _wxStr(w) {
+    return w
+        ? `${w.temperature}°C / ${w.weather} / H ${w.temperature_high} L ${w.temperature_low}`
+        : t('settings.log_weather_failed');
+}
+
+// ─── Geocoding: ZIP / city / address → lat/lon via Nominatim ────────
+// Free public service (OpenStreetMap). Single-user setup is well within
+// the 1 req/sec policy. We surface up to 3 results so the user picks
+// the right one when names collide (e.g. multiple "Springfield"s).
+function tFb(key, fbZh, fbEn) {
+    const isEN = window.getLang && window.getLang() === 'en';
+    const v = window.t ? window.t(key) : null;
+    if (v && v !== key) return v;
+    return isEN ? fbEn : fbZh;
+}
+
+async function nominatimSearch(query) {
+    const url = 'https://nominatim.openstreetmap.org/search'
+        + '?q=' + encodeURIComponent(query)
+        + '&format=jsonv2&limit=3&addressdetails=1';
+    const res = await fetch(url, { headers: { 'Accept-Language': window.getLang ? window.getLang() : 'en' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+}
+
+function renderSearchResults(items) {
+    const wrap = document.getElementById('searchResults');
+    wrap.innerHTML = '';
+    if (!items || items.length === 0) {
+        document.getElementById('searchStatus').textContent =
+            tFb('settings.search_no_results', '找不到符合的位置', 'No matching location');
+        return;
+    }
+    document.getElementById('searchStatus').textContent =
+        items.length === 1
+            ? ''
+            : tFb('settings.search_pick_one', '請點選正確的位置:', 'Pick the correct one:');
+    for (const r of items) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.style.cssText = 'text-align:left;padding:8px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:0.9rem;';
+        const lat = parseFloat(r.lat).toFixed(4);
+        const lon = parseFloat(r.lon).toFixed(4);
+        btn.innerHTML = `<div style="font-weight:600;">${r.display_name}</div>`
+            + `<div style="color:#888;font-size:0.82rem;margin-top:2px;">lat ${lat}, lon ${lon}</div>`;
+        btn.addEventListener('click', () => pickSearchResult(r));
+        wrap.appendChild(btn);
+    }
+}
+
+async function pickSearchResult(r) {
+    // Fill manual fields so user can see what got applied
+    document.getElementById('lat').value = parseFloat(r.lat).toFixed(6);
+    document.getElementById('lon').value = parseFloat(r.lon).toFixed(6);
+    // Try to derive a friendly city name from address detail
+    const a = r.address || {};
+    const cityGuess = a.city || a.town || a.village || a.county || a.state || '';
+    if (cityGuess) document.getElementById('city').value = cityGuess;
+    // Use the browser's resolved timezone — Nominatim doesn't return TZ
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    if (tz) document.getElementById('timezone').value = tz;
+
+    document.getElementById('searchStatus').textContent =
+        tFb('settings.search_saving', '儲存中…', 'Saving…');
+    try {
+        const saved = await saveSettings();
+        const w = await testWeather();
+        document.getElementById('searchResults').innerHTML = '';
+        document.getElementById('searchStatus').textContent = '';
+        setLog(`${t('settings.log_saved')}\n\n${JSON.stringify(saved, null, 2)}\n\n${t('settings.log_today_weather')}\n${_wxStr(w)}`);
+        await loadSettings();
+    } catch (err) {
+        document.getElementById('searchStatus').textContent =
+            (window.t ? t('settings.log_error') : 'Error: ') + (err.message || err);
+    }
+}
+
+document.getElementById('searchBtn').addEventListener('click', async () => {
+    const q = document.getElementById('searchInput').value.trim();
+    if (!q) return;
+    const btn = document.getElementById('searchBtn');
+    const status = document.getElementById('searchStatus');
+    document.getElementById('searchResults').innerHTML = '';
+    btn.disabled = true;
+    status.textContent = tFb('settings.search_searching', '搜尋中…', 'Searching…');
+    try {
+        const results = await nominatimSearch(q);
+        renderSearchResults(results);
+        // Single hit: skip the picker, apply directly.
+        if (results && results.length === 1) {
+            await pickSearchResult(results[0]);
+        }
+    } catch (err) {
+        status.textContent = tFb('settings.search_failed', '搜尋失敗 (網路問題?)', 'Search failed (network?)');
+    } finally {
+        btn.disabled = false;
+    }
+});
+// Press Enter in the search box = click the button
+document.getElementById('searchInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('searchBtn').click(); }
+});
+
+document.getElementById('quickBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('quickBtn');
+    btn.disabled = true;
+    try {
+        // 1. locate
+        btn.textContent = t('settings.btn_locating');
+        setLog(t('settings.log_locating'));
+        const pos = await getCurrentPositionAsync();
+        document.getElementById('lat').value = pos.coords.latitude.toFixed(6);
+        document.getElementById('lon').value = pos.coords.longitude.toFixed(6);
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        if (tz) document.getElementById('timezone').value = tz;
+
+        // 2. save
+        btn.textContent = t('settings.btn_saving');
+        setLog(t('settings.log_located_saving', {
+            lat: pos.coords.latitude.toFixed(4),
+            lon: pos.coords.longitude.toFixed(4),
+        }));
+        const saved = await saveSettings();
+
+        // 3. test weather
+        btn.textContent = t('settings.btn_fetching_wx');
+        const w = await testWeather();
+        setLog(`${t('settings.log_done')}\n\n${t('settings.log_saved_label')}\n${JSON.stringify(saved, null, 2)}\n\n${t('settings.log_today_weather')}\n${_wxStr(w)}`);
+        // refresh the displayed currentInfo so the red "no location" warning clears
+        await loadSettings();
+    } catch (err) {
+        setLog(t('settings.log_error') + describeGeoError(err));
+    } finally {
+        btn.disabled = false;
+        btn.textContent = t('settings.quick_btn');
+    }
+});
+
+document.getElementById('manualBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('manualBtn');
+    btn.disabled = true; btn.textContent = t('settings.log_saving_short');
+    try {
+        const saved = await saveSettings();
+        const w = await testWeather();
+        setLog(`${t('settings.log_saved')}\n\n${JSON.stringify(saved, null, 2)}\n\n${t('settings.log_today_weather')}\n${_wxStr(w)}`);
+        await loadSettings();
+    } catch (err) {
+        setLog(t('settings.log_error') + describeGeoError(err));
+    } finally {
+        btn.disabled = false; btn.textContent = t('settings.manual_btn');
+    }
+});
+
+// Saving the temperature-unit radio is independent from lat/lon save —
+// fires on change so the user sees instant feedback.
+document.querySelectorAll('input[name="tempUnit"]').forEach(r => {
+    r.addEventListener('change', async () => {
+        const unit = document.querySelector('input[name="tempUnit"]:checked').value;
+        const status = document.getElementById('tempUnitStatus');
+        status.textContent = '…';
+        try {
+            await fetch('/users/settings', {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ temp_unit: unit }),
+            });
+            try { localStorage.setItem('cm_temp_unit', unit); } catch (e) {}
+            status.textContent = '✓';
+            // Notify other open pages so their displays update without reload
+            window.dispatchEvent(new CustomEvent('cm-temp-unit-change', { detail: unit }));
+        } catch (err) {
+            status.textContent = 'failed';
+        }
+    });
+});
+
+loadSettings();
+window.onLanguageChange = loadSettings;
+</script>
+{% endblock %}

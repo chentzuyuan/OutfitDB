@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{% block title %}ClosetMind{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/app.css" />
+    <link rel="manifest" href="/static/manifest.json" />
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ClosetMind" />
+    <meta name="theme-color" content="#111111" />
+    <script src="/static/js/i18n.js"></script>
+    <script src="/static/js/temp_unit.js"></script>
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="/">ClosetMind</a>
+        <nav>
+            <a href="/recommend" data-i18n="nav.recommend">穿搭推薦</a>
+            <a href="/upload" data-i18n="nav.upload">上傳衣物</a>
+            <a href="/closet" data-i18n="nav.closet">衣櫃</a>
+            <div class="nav-more">
+                <button class="nav-more-btn" id="moreBtn" aria-expanded="false">
+                    <span data-i18n="nav.more">其他功能</span> ▾
+                </button>
+                <div class="nav-more-menu" id="moreMenu">
+                    <a href="/training/temperature" data-i18n="nav.train_temp">溫度訓練</a>
+                    <a href="/training/aesthetic"   data-i18n="nav.train_aes">美感訓練</a>
+                    <a href="/training/occasion"    data-i18n="nav.train_occ">場合訓練</a>
+                    <a href="/import" data-i18n="nav.import">批次匯入</a>
+                    <a href="/settings" data-i18n="nav.settings">設定</a>
+                </div>
+            </div>
+        </nav>
+        <div class="profile-switch">
+            <button class="profile-btn" id="profileBtn" aria-expanded="false">
+                <span class="profile-icon">User:</span>
+                <span id="profileName">…</span>
+                <span class="caret">▾</span>
+            </button>
+            <div class="profile-menu" id="profileMenu">
+                <div class="profile-menu-head">
+                    <span data-i18n="nav.profile_switch">切換使用者</span>
+                    <button class="profile-edit-toggle" id="profileEditToggle" data-i18n="nav.profile_edit">編輯</button>
+                </div>
+                <div id="profileList"></div>
+                <button class="profile-delete-batch" id="profileDeleteBatch" style="display:none;"></button>
+                <hr />
+                <button class="profile-add-btn" id="profileAddBtn" data-i18n="nav.profile_add">+ 新增使用者</button>
+            </div>
+        </div>
+        <button class="lang-toggle" id="langToggle" data-i18n="nav.lang_toggle" title="Switch language">EN</button>
+    </header>
+
+    <div id="addProfileModal" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:440px;">
+            <div class="modal-head">
+                <h3 data-i18n="nav.profile_add_title">新增使用者</h3>
+                <button class="modal-close" id="addProfileCancel">X</button>
+            </div>
+            <div class="grid">
+                <label><span data-i18n="nav.profile_name">使用者名稱</span>
+                    <input id="newProfileName" placeholder="e.g. Clark" />
+                </label>
+            </div>
+            <p style="color:#888;font-size:0.85rem;margin:6px 0 0;" data-i18n="nav.profile_path_hint">資料會存在 profiles/{name}/</p>
+            <div class="modal-actions">
+                <button class="btn secondary" id="addProfileCancel2" data-i18n="rec.modal.cancel">取消</button>
+                <button class="btn" id="addProfileSubmit" data-i18n="nav.profile_create">建立並切換</button>
+            </div>
+            <pre id="addProfileResult" class="result" style="margin-top:10px;"></pre>
+        </div>
+    </div>
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="cm-footer">
+        <span>ClosetMind <span id="appVersion">v0.1.0</span></span>
+        <span id="updateBanner" style="display:none;">
+            ·
+            <a id="updateLink" href="#" target="_blank" rel="noopener"
+               data-i18n="footer.update_available">有新版可下載 →</a>
+        </span>
+    </footer>
+    <script>
+        // Surface the running app version + nudge user when a newer
+        // build exists. /version is cached server-side for 6 hours so
+        // calling this on every page load is cheap.
+        (function () {
+            fetch('/version').then(r => r.json()).then(v => {
+                const el = document.getElementById('appVersion');
+                if (el && v.current) el.textContent = 'v' + v.current;
+                if (v.update_available && v.url) {
+                    const banner = document.getElementById('updateBanner');
+                    const link = document.getElementById('updateLink');
+                    if (banner && link) {
+                        link.href = v.url;
+                        if (v.notes) link.title = v.notes;
+                        banner.style.display = '';
+                    }
+                }
+            }).catch(() => { /* offline / endpoint missing — silent */ });
+        })();
+    </script>
+    <script src="/static/js/app.js"></script>
+    <script>
+        document.getElementById('langToggle').addEventListener('click', () => window.toggleLang());
+        (function () {
+            const btn = document.getElementById('moreBtn');
+            const menu = document.getElementById('moreMenu');
+            if (btn && menu) {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const open = menu.classList.toggle('open');
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                });
+                document.addEventListener('click', (e) => {
+                    if (!menu.contains(e.target) && e.target !== btn) {
+                        menu.classList.remove('open');
+                        btn.setAttribute('aria-expanded', 'false');
+                    }
+                });
+            }
+        })();
+
+        // ─── Profile switcher ───
+        (function () {
+            const pBtn = document.getElementById('profileBtn');
+            const pMenu = document.getElementById('profileMenu');
+            const pName = document.getElementById('profileName');
+            const pList = document.getElementById('profileList');
+            if (!pBtn) return;
+
+            let editMode = false;
+            const selectedSet = new Set();
+            let cachedProfilesData = null;
+
+            const editToggle = document.getElementById('profileEditToggle');
+            const deleteBatchBtn = document.getElementById('profileDeleteBatch');
+
+            function setEditMode(on) {
+                editMode = on;
+                if (!on) selectedSet.clear();
+                editToggle.textContent = window.t ? window.t(on ? 'nav.profile_done' : 'nav.profile_edit') : (on ? 'Done' : 'Edit');
+                renderProfileList();
+                renderDeleteBatch();
+            }
+            function renderDeleteBatch() {
+                if (editMode && selectedSet.size > 0) {
+                    deleteBatchBtn.style.display = 'block';
+                    deleteBatchBtn.textContent = window.t
+                        ? window.t('nav.profile_delete_batch', { n: selectedSet.size })
+                        : `Delete ${selectedSet.size} selected`;
+                } else {
+                    deleteBatchBtn.style.display = 'none';
+                }
+            }
+
+            function renderProfileList() {
+                if (!cachedProfilesData) return;
+                const data = cachedProfilesData;
+                pList.innerHTML = '';
+                for (const p of data.profiles) {
+                    const isActive = p.name === data.active;
+                    const checked = selectedSet.has(p.name);
+                    const row = document.createElement('div');
+                    row.className = 'profile-item' + (isActive ? ' active' : '') + (editMode ? ' edit-mode' : '') + (checked ? ' selected' : '');
+                    row.innerHTML = editMode
+                        ? `<span class="profile-checkbox">${checked ? '[x]' : '[ ]'}</span>
+                           <span class="profile-name-text">${p.name}${isActive ? ' <small>(active)</small>' : ''}</span>`
+                        : `<a href="#" class="profile-name-link"><span>${p.name}</span>${isActive ? ' <small>(active)</small>' : ''}</a>`;
+
+                    if (editMode) {
+                        row.addEventListener('click', (e) => {
+                            e.stopPropagation();  // keep the menu open
+                            if (selectedSet.has(p.name)) selectedSet.delete(p.name);
+                            else selectedSet.add(p.name);
+                            renderProfileList();
+                            renderDeleteBatch();
+                        });
+                    } else {
+                        row.querySelector('.profile-name-link').addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            if (isActive) { closeMenu(); return; }
+                            const switchRes = await fetch('/profiles/active', {
+                                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ name: p.name }),
+                            });
+                            if (switchRes.ok) window.location.href = '/';
+                            else {
+                                const err = await switchRes.json().catch(() => ({}));
+                                alert(t('common.switch_failed') + ': ' + (err.detail || ''));
+                            }
+                        });
+                    }
+                    pList.appendChild(row);
+                }
+            }
+
+            async function loadProfiles() {
+                try {
+                    const r = await fetch('/profiles');
+                    if (!r.ok) return;
+                    cachedProfilesData = await r.json();
+                    pName.textContent = cachedProfilesData.active || '—';
+                    renderProfileList();
+                } catch {}
+            }
+
+            editToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setEditMode(!editMode);
+            });
+
+            deleteBatchBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (selectedSet.size === 0) return;
+                const names = [...selectedSet];
+                const msg = window.t
+                    ? window.t('nav.profile_delete_batch_confirm', { names: names.join(', ') })
+                    : `Delete profile(s): ${names.join(', ')} and ALL wardrobe data? Cannot be undone.`;
+                if (!confirm(msg)) return;
+                let anyFailed = false;
+                for (const name of names) {
+                    const dr = await fetch(`/profiles/${encodeURIComponent(name)}`, { method: 'DELETE' });
+                    if (!dr.ok) anyFailed = true;
+                }
+                if (anyFailed) alert(t('common.partial_delete_failed'));
+                window.location.href = '/';
+            });
+            function openMenu() { pMenu.classList.add('open'); pBtn.setAttribute('aria-expanded', 'true'); }
+            function closeMenu() { pMenu.classList.remove('open'); pBtn.setAttribute('aria-expanded', 'false'); }
+            pBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (pMenu.classList.contains('open')) closeMenu();
+                else { loadProfiles(); openMenu(); }
+            });
+            document.addEventListener('click', (e) => {
+                if (!pMenu.contains(e.target) && e.target !== pBtn) closeMenu();
+            });
+            loadProfiles();
+
+            // Add profile modal
+            const modal = document.getElementById('addProfileModal');
+            const showModal = () => modal.style.display = 'flex';
+            const hideModal = () => modal.style.display = 'none';
+            document.getElementById('profileAddBtn').addEventListener('click', () => {
+                closeMenu();
+                document.getElementById('newProfileName').value = '';
+                document.getElementById('addProfileResult').textContent = '';
+                showModal();
+            });
+            document.getElementById('addProfileCancel').addEventListener('click', hideModal);
+            document.getElementById('addProfileCancel2').addEventListener('click', hideModal);
+            document.getElementById('addProfileSubmit').addEventListener('click', async () => {
+                const name = document.getElementById('newProfileName').value.trim();
+                if (!name) { alert(window.t ? window.t('nav.profile_name_required') : 'Please enter a name'); return; }
+                const r = await fetch('/profiles', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name }),
+                });
+                const data = await r.json();
+                document.getElementById('addProfileResult').textContent = JSON.stringify(data, null, 2);
+                if (!r.ok) return;
+                await fetch('/profiles/active', {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name }),
+                });
+                window.location.href = '/';
+            });
+        })();
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

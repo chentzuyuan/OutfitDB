@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}ClosetMind · Bulk Import{% endblock %}
+{% block content %}
+<h1 data-i18n="import.title">CSV 批次匯入</h1>
+
+<section class="panel">
+    <h2 data-i18n="import.upload_h2">上傳 CSV</h2>
+    <p style="color:#666;" data-i18n="import.desc">用 Excel / Google Sheet 準備好衣櫃 CSV，一次匯入整批衣物（不含圖片，可後續上傳）。</p>
+
+    <!-- Path A: upload an actual .csv file -->
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input id="csvFile" type="file" accept=".csv,text/csv" />
+        <button class="btn" id="importBtn" data-i18n="import.btn">匯入</button>
+    </div>
+
+    <!-- Path B: paste raw CSV text (e.g. straight from ChatGPT's output)
+         and import without saving a file first. Backend uses the same
+         /items/import_csv endpoint — JS wraps the text in a Blob. -->
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid #eee;">
+        <label style="display:block;font-size:0.92rem;color:#444;margin-bottom:4px;font-weight:600;" data-i18n="import.paste_h3">或直接貼上 CSV 文字</label>
+        <p style="color:#888;font-size:0.85rem;margin-bottom:6px;" data-i18n="import.paste_hint">從 ChatGPT / Claude / Gemini 複製整段 CSV 後貼到這裡,不用先存檔。</p>
+        <textarea id="csvPaste" data-i18n-attr="placeholder:import.paste_ph"
+            placeholder="name,category,thickness,...&#10;Black T-Shirt,top,thin,..." rows="8"
+            style="width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:0.82rem;padding:8px;border:1px solid #ccc;border-radius:6px;resize:vertical;"></textarea>
+        <button class="btn" id="importPasteBtn" style="margin-top:8px;" data-i18n="import.paste_btn">從文字匯入</button>
+    </div>
+
+    <pre id="importResult" class="result" style="margin-top:12px;"></pre>
+</section>
+
+<section class="panel">
+    <h2 data-i18n="import.template_h2">CSV 範本</h2>
+    <p data-i18n="import.template_desc">複製下方範本到 Excel / Google Sheet 編輯，存成 .csv 後匯入。</p>
+    <button class="btn secondary" id="downloadBtn" data-i18n="import.download">下載範本 CSV</button>
+
+    <!-- AI helper: copy a long prompt into ChatGPT/Claude/Gemini, answer
+         the questions, paste the resulting CSV back. The prompt embeds
+         the full schema so the AI can't make up enum values. -->
+    <details style="margin-top:18px;padding:12px;background:#f8f5ee;border-radius:8px;border:1px solid #e9dcb6;">
+        <summary style="cursor:pointer;font-weight:600;" data-i18n="import.ai_summary">不太會用 CSV?讓 AI 幫你填</summary>
+        <p style="color:#555;margin-top:10px;" data-i18n="import.ai_intro">把下面這段提示詞複製貼到 ChatGPT / Claude / Gemini,它會問你問題,最後產出可以直接 import 的 CSV。</p>
+        <div style="display:flex;align-items:center;gap:10px;margin:10px 0;">
+            <button class="btn" id="copyPromptBtn" data-i18n="import.copy_prompt">複製提示詞</button>
+            <span id="copyPromptStatus" style="color:#2a8c2a;font-size:0.9rem;"></span>
+        </div>
+        <textarea id="aiPromptText" readonly rows="20"
+            style="width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:0.78rem;padding:10px;border:1px solid #d8c98a;border-radius:6px;background:#fff;resize:vertical;"></textarea>
+    </details>
+
+    <details style="margin-top:10px;">
+        <summary style="cursor:pointer;" data-i18n="import.fields_summary">欄位說明</summary>
+        <table class="import-fields">
+            <thead><tr>
+                <th data-i18n="import.col">欄位</th>
+                <th data-i18n="import.req">必填</th>
+                <th data-i18n="import.vals">值 / 說明</th>
+            </tr></thead>
+            <tbody>
+                <tr><td><code>name</code></td><td data-i18n="import.yes">Yes</td><td>e.g. "Black T-Shirt"</td></tr>
+                <tr><td><code>category</code></td><td data-i18n="import.yes">Yes</td><td>top / bottom / shoes / accessory / fullbody</td></tr>
+                <tr><td><code>thickness</code></td><td data-i18n="import.yes">Yes</td><td>very_thin / thin / thick / very_thick</td></tr>
+                <tr><td><code>colors</code></td><td>—</td><td><span data-i18n="import.semicolon_sep">分號分隔,e.g.</span> <code>black;white</code></td></tr>
+                <tr><td><code>material</code></td><td>—</td><td>cotton / wool / linen / polyester / denim / leather / silk / cashmere / nylon / fleece / other</td></tr>
+                <tr><td><code>pattern</code></td><td>—</td><td>solid / striped / plaid / floral / graphic / checked / dotted / other</td></tr>
+                <tr><td><code>pattern_complexity</code></td><td>—</td><td>0–3</td></tr>
+                <tr><td><code>can_wear_alone</code></td><td>—</td><td>true / false <span data-i18n="import.default_true">(預設 true)</span></td></tr>
+                <tr><td><code>is_multicolor</code></td><td>—</td><td>true / false</td></tr>
+                <tr><td><code>style_tags</code></td><td>—</td><td><span data-i18n="import.semicolon_sep">分號分隔,e.g.</span> <code>casual;formal</code></td></tr>
+                <tr><td><code>sleeve</code></td><td>—</td><td>long / short / sleeveless <span data-i18n="import.sleeve_note">(top/fullbody 用)</span></td></tr>
+                <tr><td><code>collar</code></td><td>—</td><td>crew / v / polo / turtleneck / hooded / button_down / shirt / spread</td></tr>
+                <tr><td><code>shoulder_fit</code> / <code>waist_fit</code></td><td>—</td><td>slim / regular / loose</td></tr>
+                <tr><td><code>top_length</code></td><td>—</td><td>cropped / short / regular / long</td></tr>
+                <tr><td><code>pants_fit</code></td><td>—</td><td>slim / regular / loose</td></tr>
+                <tr><td><code>pants_length</code></td><td>—</td><td>short / regular / long / full</td></tr>
+            </tbody>
+        </table>
+    </details>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+// Demo CSV — column order matches the field-reference table 1:1, so users
+// can fill in optional columns confidently. Empty optional cells mean
+// "no preference" / not-applicable for that category.
+const TEMPLATE = `name,category,thickness,colors,material,pattern,pattern_complexity,can_wear_alone,is_multicolor,style_tags,sleeve,collar,top_length,shoulder_fit,waist_fit,pants_fit,pants_length
+White Tank Top,top,very_thin,white,cotton,solid,0,false,false,casual,sleeveless,crew,regular,regular,regular,,
+Black T-Shirt,top,thin,black,cotton,solid,0,true,false,casual;minimal,short,crew,regular,regular,regular,,
+Blue Oxford Shirt,top,thin,blue,cotton,solid,0,true,false,formal;business,long,button_down,regular,regular,regular,,
+Beige Knit Sweater,top,thick,beige,wool,solid,0,true,false,casual,long,crew,regular,regular,regular,,
+Charcoal Suit Jacket,top,thick,gray,wool,solid,0,true,false,formal,long,,regular,regular,regular,,
+Black Down Jacket,top,very_thick,black,nylon,solid,0,true,false,outdoor,long,hooded,long,regular,regular,,
+Khaki Shorts,bottom,very_thin,beige,cotton,solid,0,true,false,casual,,,,,,regular,short
+Dark Jeans,bottom,thick,navy,denim,solid,0,true,false,casual,,,,,,regular,long
+Black Slacks,bottom,thin,black,polyester,solid,0,true,false,formal,,,,,,slim,long
+White Sneakers,shoes,thin,white,leather,solid,0,true,false,casual,,,,,,,
+Black Leather Shoes,shoes,thin,black,leather,solid,0,true,false,formal,,,,,,,
+Brown Boots,shoes,thick,brown,leather,solid,0,true,false,outdoor,,,,,,,
+Brown Leather Belt,accessory,very_thin,brown,leather,solid,0,true,false,formal,,,,,,,
+Navy Wool Scarf,accessory,thick,navy,wool,solid,0,true,false,outdoor,,,,,,,
+`;
+
+document.getElementById('downloadBtn').addEventListener('click', () => {
+    const blob = new Blob([TEMPLATE], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'closetmind_template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+});
+
+// ─── AI prompt helper ────────────────────────────────────────────────
+// Single source of truth: the header line is taken from the same TEMPLATE
+// constant above, so if we ever add a column the prompt updates with it
+// automatically (no need to remember to sync two strings).
+const HEADER_LINE = TEMPLATE.split('\n')[0];
+
+const AI_PROMPT = `I need you to help me build a wardrobe CSV file for ClosetMind. Ask me
+questions about each clothing item, then output ONE clean CSV.
+
+DO NOT:
+- give fashion advice or outfit recommendations
+- translate column names or values (keep English even if I describe items in
+  Chinese / another language)
+- invent columns, rename columns, or reorder them
+- output markdown tables, explanations, or comments outside the CSV
+
+OUTPUT FORMAT:
+- ONE code block, plain CSV, no language tag
+- First row = exact header below
+- One row per clothing item
+
+HEADER (use exactly, in this order):
+${HEADER_LINE}
+
+ALLOWED VALUES (use ONLY these):
+- category:           top | bottom | shoes | accessory | fullbody
+- thickness:          very_thin | thin | thick | very_thick
+- material:           cotton | wool | linen | polyester | denim | leather | silk | cashmere | nylon | fleece | other
+- pattern:            solid | striped | plaid | floral | graphic | checked | dotted | other
+- pattern_complexity: integer 0-3
+- can_wear_alone:     true | false   (default true if unsure)
+- is_multicolor:      true | false   (default false if unsure)
+- sleeve:             long | short | sleeveless   (only for top / fullbody, leave blank otherwise)
+- collar:             crew | v | polo | turtleneck | hooded | button_down | shirt | spread   (only for top / fullbody, blank otherwise)
+- top_length:         cropped | short | regular | long
+- shoulder_fit / waist_fit / pants_fit: slim | regular | loose
+- pants_length:       short | regular | long | full   (bottom only)
+
+MULTI-VALUE & EDGE CASES:
+- colors / style_tags: separate with SEMICOLON, e.g. black;white  /  casual;minimal
+- If a value contains a comma, wrap the WHOLE CELL in double quotes,
+  e.g. "Black, white striped tee"
+- If a field doesn't apply (e.g. sleeve for shoes), leave it blank
+  between the commas — don't write "n/a" or "none"
+- Colors: pick from common English: black, white, gray, navy, blue,
+  brown, beige, green, red, pink, yellow, orange, purple
+
+PROCESS:
+1. Ask me what items I want to add.
+2. For each item, ask only the questions you need (skip slots that don't
+   apply — e.g. don't ask "sleeve" for shoes).
+3. When I say "done", output the full CSV (header + all rows) in ONE code
+   block. Nothing else.
+
+Start by asking me what clothing items I want to add.`;
+
+document.getElementById('aiPromptText').value = AI_PROMPT;
+
+document.getElementById('copyPromptBtn').addEventListener('click', async () => {
+    const status = document.getElementById('copyPromptStatus');
+    const isEN = window.getLang && window.getLang() === 'en';
+    try {
+        await navigator.clipboard.writeText(AI_PROMPT);
+        status.textContent = isEN ? '✓ Copied' : '✓ 已複製';
+        setTimeout(() => { status.textContent = ''; }, 2500);
+    } catch (e) {
+        // Fallback for browsers without clipboard API or non-https origins:
+        // select the textarea so user can Cmd+C manually.
+        const ta = document.getElementById('aiPromptText');
+        ta.focus(); ta.select();
+        status.textContent = isEN ? 'Press ⌘C / Ctrl+C to copy' : '請按 ⌘C / Ctrl+C 複製';
+    }
+});
+
+// Shared core: send a CSV-shaped Blob to the existing /items/import_csv
+// endpoint and dump the result. Both the file-upload path and the
+// paste-text path funnel through this so the result UI is identical.
+async function submitCsvBlob(blob, btn, btnLabelKey, btnLabelDefault) {
+    const fd = new FormData();
+    // Filename is purely cosmetic for the server; backend reads .read() bytes.
+    fd.append('file', blob, 'pasted.csv');
+    btn.disabled = true;
+    btn.textContent = window.t ? window.t('import.importing') : 'Importing…';
+    try {
+        const r = await fetch('/items/import_csv', { method: 'POST', body: fd });
+        const data = await r.json();
+        document.getElementById('importResult').textContent = JSON.stringify(data, null, 2);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = window.t ? window.t(btnLabelKey) : btnLabelDefault;
+    }
+}
+
+document.getElementById('importBtn').addEventListener('click', async () => {
+    const f = document.getElementById('csvFile').files[0];
+    if (!f) { alert(window.t ? window.t('import.no_file') : 'Pick a CSV first'); return; }
+    await submitCsvBlob(f, document.getElementById('importBtn'), 'import.btn', 'Import');
+});
+
+document.getElementById('importPasteBtn').addEventListener('click', async () => {
+    const raw = document.getElementById('csvPaste').value;
+    // Strip a leading ```csv / ``` fence if the user pasted ChatGPT's code
+    // block markup along with the content. Forgiving by design — most
+    // users won't realise to strip those backticks themselves.
+    let text = raw.trim();
+    text = text.replace(/^```[a-zA-Z]*\s*\n/, '').replace(/\n```\s*$/, '').trim();
+    if (!text) {
+        alert(window.t ? window.t('import.no_paste') : 'Paste some CSV text first');
+        return;
+    }
+    const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
+    await submitCsvBlob(blob, document.getElementById('importPasteBtn'),
+        'import.paste_btn', 'Import from text');
+});
+</script>
+{% endblock %}

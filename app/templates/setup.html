@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ClosetMind · Setup</title>
+    <link rel="stylesheet" href="/static/css/app.css" />
+    <!-- Setup page is standalone (doesn't extend base.html) so we must
+         load i18n.js explicitly. Without it the click handler below
+         hits an undefined `t()` and silently aborts. -->
+    <script src="/static/js/i18n.js"></script>
+    <style>
+        body { background: #f6f6f4; }
+        .setup-wrap {
+            max-width: 540px; margin: 60px auto; padding: 28px;
+            background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .setup-wrap h1 { margin-top: 0; }
+        .setup-wrap p { color: #555; line-height: 1.6; }
+        .setup-wrap input { width: 100%; padding: 10px; font-size: 1rem; border: 1px solid #ccc; border-radius: 6px; margin: 10px 0; }
+        .setup-wrap .hint { font-size: 0.85rem; color: #888; }
+    </style>
+</head>
+<body>
+    <div class="setup-wrap">
+        <h1 data-i18n="setup.welcome_title">Welcome to ClosetMind</h1>
+        <p data-i18n="setup.intro">建立第一個 profile — 命名你的衣櫃。資料會存在 <code>profiles/{name}/</code>。</p>
+
+        <!-- IMPORTANT: data-i18n on <span>, NOT on <label>. applyTranslations
+             sets textContent on the tagged element, which wipes ALL child
+             nodes — putting it on <label> would delete the <input>. -->
+        <label>
+            <span data-i18n="setup.profile_name_label">Profile 名稱</span>
+            <input id="profileName" value="Me" placeholder="e.g. Me, Alex, Sam" />
+        </label>
+        <div class="hint" data-i18n="setup.name_hint">不可含 / \ 或以 . 開頭。建議用簡單英文。</div>
+
+        <button class="btn" id="setupBtn" style="margin-top:14px;" data-i18n="setup.create_and_enter">建立並進入</button>
+
+        <!-- Sample wardrobe escape hatch — only shown when the bundled
+             Tester profile is present (DMG installs); hidden otherwise.
+             Visibility is decided by JS at load time via /setup/status. -->
+        <div id="sampleBlock" style="display:none;margin-top:24px;padding-top:18px;border-top:1px dashed #ddd;">
+            <div style="font-size:0.9rem;color:#666;margin-bottom:8px;" data-i18n="setup.sample_intro">
+                先看看內建的範例衣櫃 (Tester, 54 件) 嗎？之後還是可以建立自己的 profile。
+            </div>
+            <button class="btn" id="sampleBtn" style="background:#fff8e8;color:#6b4400;border:1px solid #f0d590;" data-i18n="setup.use_sample">直接用範例衣櫃 (Tester) 試玩</button>
+        </div>
+
+        <pre id="result" class="result" style="margin-top:14px;"></pre>
+    </div>
+    <script>
+    // Apply translations now that i18n.js loaded synchronously above.
+    if (window.applyTranslations) window.applyTranslations();
+
+    const input = document.getElementById('profileName');
+
+    document.getElementById('setupBtn').addEventListener('click', async () => {
+        const name = (input.value || '').trim();
+        if (!name) { alert(window.t('setup.name_required')); return; }
+        const btn = document.getElementById('setupBtn');
+        btn.disabled = true; btn.textContent = window.t('setup.creating');
+        try {
+            const res = await fetch('/setup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            const data = await res.json();
+            document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+            if (res.ok) {
+                setTimeout(() => { window.location.href = '/'; }, 700);
+            } else {
+                btn.disabled = false;
+                btn.textContent = window.t('setup.create_and_enter');
+            }
+        } catch (e) {
+            document.getElementById('result').textContent = 'Error: ' + e.message;
+            btn.disabled = false;
+            btn.textContent = window.t('setup.create_and_enter');
+        }
+    });
+
+    // Show the sample-wardrobe button only when the .app actually
+    // shipped Tester (DMG installs only — dev runs on `pip install -r`
+    // wouldn't have it).
+    (async function () {
+        try {
+            const r = await fetch('/profiles');
+            if (!r.ok) return;
+            const data = await r.json();
+            const hasTester = (data.profiles || []).some(p => p.name === 'Tester');
+            if (hasTester) document.getElementById('sampleBlock').style.display = '';
+        } catch (_) {}
+    })();
+
+    document.getElementById('sampleBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('sampleBtn');
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = window.t ? window.t('setup.creating') : '…';
+        try {
+            const r = await fetch('/setup/use_sample', { method: 'POST' });
+            const data = await r.json();
+            document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+            if (r.ok) {
+                setTimeout(() => { window.location.href = '/'; }, 500);
+            } else {
+                btn.disabled = false; btn.textContent = original;
+            }
+        } catch (e) {
+            document.getElementById('result').textContent = 'Error: ' + e.message;
+            btn.disabled = false; btn.textContent = original;
+        }
+    });
+    </script>
+</body>
+</html>

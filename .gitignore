@@ -1,0 +1,51 @@
+# ─── Python ─────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# ─── Virtual environment ───────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ─── Editor / OS ───────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# ─── Secrets / config ──────────────────────────────────────────────────
+.env
+.env.local
+
+# ─── User data (local-first; never commit) ────────────────────────────
+# Real user wardrobe data lives in ~/MyClosetMind/ (or the path chosen
+# at /setup). The repo only contains demo specs in tools/demo_data/.
+data/*.db
+models/*.json
+app/static/uploads/*
+!app/static/uploads/.gitkeep
+
+# Tester sample wardrobe IS committed for the Render demo deploy:
+#   seed_profiles/Tester/{wardrobe.db, items/, models/, README.txt}
+# is what the lifespan copies into PROFILES_ROOT on cold start. Don't
+# accidentally exclude it via the rules above.
+!seed_profiles/
+!seed_profiles/**
+
+# ─── Build / test artifacts ────────────────────────────────────────────
+dist/
+build/
+htmlcov/
+.coverage
+coverage.xml
+*.dmg
+*.pkg
+
+# ─── PyInstaller spec output ───────────────────────────────────────────
+*.manifest
+__pycache__/

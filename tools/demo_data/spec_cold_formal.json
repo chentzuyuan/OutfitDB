@@ -1,0 +1,5 @@
+[
+  {"slot": "61", "name": "Black Wool Peacoat",       "category": "top", "thickness": "very_thick", "colors": ["black"], "material": "wool", "pattern": "solid", "can_wear_alone": true, "sleeve": "long", "collar": "polo", "top_length": "regular", "style_tags": ["formal", "outdoor"], "prompt": "a single black double-breasted wool peacoat with notched lapels and large buttons, just the coat alone"},
+  {"slot": "62", "name": "Navy Herringbone Overcoat","category": "top", "thickness": "very_thick", "colors": ["navy"],  "material": "wool", "pattern": "solid", "can_wear_alone": true, "sleeve": "long", "collar": "polo", "top_length": "long",     "style_tags": ["formal"],            "prompt": "a single navy blue knee-length herringbone wool overcoat, single-breasted, classic men formal coat"},
+  {"slot": "63", "name": "Charcoal Cashmere Scarf",  "category": "accessory", "thickness": "thick", "colors": ["gray"], "material": "cashmere", "pattern": "solid", "can_wear_alone": true, "style_tags": ["formal", "outdoor"], "prompt": "a charcoal gray cashmere scarf neatly folded, soft luxurious texture"}
+]

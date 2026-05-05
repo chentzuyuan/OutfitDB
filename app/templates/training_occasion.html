@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}ClosetMind · Occasion Training{% endblock %}
+{% block content %}
+<h1 data-i18n="train2.occ.title">場合訓練</h1>
+
+<section class="panel" id="introPanel">
+    <p data-i18n="train2.occ.intro">為每件穿搭勾選「我會穿這套去什麼場合」。可以多選，也可以全部不勾（不適合任何場合）。</p>
+    <div class="train-progress">
+        <div class="train-progress-bar"><div id="progressFill"></div></div>
+        <div class="train-progress-text" id="progressText"></div>
+    </div>
+    <button class="btn run-big" id="startBtn" data-i18n="train2.occ.start">開始下一批</button>
+    <a href="/recommend" id="goRecommend" class="btn secondary" style="display:none;margin-left:8px;" data-i18n="train2.occ.goto_recommend">開始用 ClosetMind</a>
+</section>
+
+<section class="panel" id="batchPanel" style="display:none;">
+    <div id="outfits" class="train-batch-grid"></div>
+    <div class="batch-foot">
+        <span id="filledInfo"></span>
+        <button class="btn run-big" id="submitBtn" disabled data-i18n="train2.occ.submit">送出這批</button>
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+const EVENTS = [
+    {key: 'home',             label_zh: '在家發呆',   label_en: 'Home / lounging'},
+    {key: 'gym',              label_zh: '健身運動',   label_en: 'Gym / workout'},
+    {key: 'beach',            label_zh: '海邊度假',   label_en: 'Beach / vacation'},
+    {key: 'casual_outing',    label_zh: '朋友聚餐 / 逛街', label_en: 'Casual outing'},
+    {key: 'date_night',       label_zh: '約會',       label_en: 'Date night'},
+    {key: 'interview',        label_zh: '面試',       label_en: 'Interview'},
+    {key: 'office',           label_zh: '上班',       label_en: 'Office / work'},
+    {key: 'business_meeting', label_zh: '商務會議',   label_en: 'Business meeting'},
+    {key: 'formal_event',     label_zh: '正式場合',   label_en: 'Formal event'},
+];
+
+function eventLabel(e) {
+    const isEN = window.getLang && window.getLang() === 'en';
+    return isEN ? e.label_en : e.label_zh;
+}
+
+let currentBatch = null;
+const answers = new Map();
+
+async function refreshProgress() {
+    const r = await fetch('/training/v2/occasion/progress').then(x => x.json());
+    const fill = document.getElementById('progressFill');
+    const text = document.getElementById('progressText');
+    const goLink = document.getElementById('goRecommend');
+    const startBtn = document.getElementById('startBtn');
+    const pct = Math.min(100, Math.round(100 * r.total_ratings / r.min_required));
+    fill.style.width = pct + '%';
+    const isEN = window.getLang && window.getLang() === 'en';
+    if (r.total_ratings >= r.min_required) {
+        text.textContent = isEN
+            ? `${r.total_ratings} ratings ✓ — model trains on the most recent 1500, older ones are ignored`
+            : `${r.total_ratings} 筆 ✓ — 模型只用最近 1500 筆訓練,更舊的會自動忽略,不會堆積`;
+    } else {
+        text.textContent = `${r.total_ratings} / ${r.min_required}`;
+    }
+    // Always allow more training — extra data only helps.
+    startBtn.style.display = '';
+    goLink.style.display = r.completed ? '' : 'none';
+}
+
+async function startBatch() {
+    const r = await fetch('/training/v2/occasion/next').then(x => x.json());
+    if (r.error || !r.outfits) return;
+    currentBatch = r;
+    answers.clear();
+    renderBatch();
+    document.getElementById('introPanel').style.display = 'none';
+    document.getElementById('batchPanel').style.display = '';
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function renderBatch() {
+    const grid = document.getElementById('outfits');
+    grid.innerHTML = '';
+    for (const o of currentBatch.outfits) {
+        const itemsHtml = o.items.map(oi => {
+            const it = oi.item;
+            const img = it && it.image_path ? `<img src="${it.image_path}" alt="${it.name}" />` : `<div class="noimg-mini"></div>`;
+            return `<div class="mini">${img}<div class="mini-name">${it ? it.name : '#' + oi.item_id}</div></div>`;
+        }).join('');
+        const eventBtns = EVENTS.map(e =>
+            `<button type="button" class="zone-btn" data-event="${e.key}">${eventLabel(e)}</button>`
+        ).join('');
+        const card = document.createElement('div');
+        card.className = 'train-outfit-card';
+        card.dataset.outfitId = o.outfit_id;
+        card.innerHTML = `
+            <div class="train-outfit-items">${itemsHtml}</div>
+            <div class="train-outfit-zones">
+                <div class="rate-label">${t('train2.occ.q')}</div>
+                <div class="zone-row">${eventBtns}</div>
+            </div>
+        `;
+        const oid = o.outfit_id;
+        answers.set(oid, new Set());
+        card.querySelectorAll('button[data-event]').forEach(b => {
+            b.addEventListener('click', () => {
+                const set = answers.get(oid);
+                const e = b.dataset.event;
+                if (set.has(e)) { set.delete(e); b.classList.remove('selected'); }
+                else            { set.add(e); b.classList.add('selected'); }
+                updateSubmit();
+            });
+        });
+        grid.appendChild(card);
+    }
+    updateSubmit();
+}
+
+function updateSubmit() {
+    const total = currentBatch.outfits.length;
+    document.getElementById('filledInfo').textContent = `${answers.size} / ${total}`;
+    document.getElementById('submitBtn').disabled = answers.size < total;
+}
+
+async function submitBatch() {
+    const ratings = currentBatch.outfits.map(o => ({
+        outfit_id: o.outfit_id,
+        events_ok: [...(answers.get(o.outfit_id) || [])],
+    }));
+    const r = await fetch('/training/v2/occasion/submit', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ratings}),
+    });
+    if (r.ok) {
+        currentBatch = null;
+        answers.clear();
+        document.getElementById('batchPanel').style.display = 'none';
+        document.getElementById('introPanel').style.display = '';
+        await refreshProgress();
+    }
+}
+
+document.getElementById('startBtn').addEventListener('click', startBatch);
+document.getElementById('submitBtn').addEventListener('click', submitBatch);
+refreshProgress();
+window.onLanguageChange = () => {
+    refreshProgress();
+    if (currentBatch) renderBatch();
+};
+</script>
+{% endblock %}

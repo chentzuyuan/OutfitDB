@@ -1,0 +1,4 @@
+[
+  {"slot": "40", "name": "Black Tuxedo Jacket", "category": "top",    "thickness": "very_thick", "colors": ["black"], "material": "wool", "pattern": "solid", "can_wear_alone": true, "sleeve": "long", "collar": "polo", "top_length": "regular", "style_tags": ["formal"], "prompt": "a single black wool tuxedo jacket with satin peak lapels, just the jacket alone"},
+  {"slot": "60", "name": "Black Tuxedo Trousers", "category": "bottom", "thickness": "thick",     "colors": ["black"], "material": "wool", "pattern": "solid", "can_wear_alone": true, "pants_fit": "slim", "pants_length": "long", "style_tags": ["formal"], "prompt": "a pair of black wool tuxedo trousers with satin side stripe, slim fit"}
+]

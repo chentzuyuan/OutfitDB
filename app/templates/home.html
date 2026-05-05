@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}ClosetMind · Home{% endblock %}
+{% block content %}
+<div id="hero" class="hero-big">
+    <div id="heroContent">
+        <h1 data-i18n="home.title">ClosetMind</h1>
+        <p class="sub" data-i18n="home.loading">載入中…</p>
+    </div>
+</div>
+<div id="checklistArea" style="display:none;">
+    <h2 class="checklist-title" data-i18n="home.checklist_title">設定進度</h2>
+    <div id="checklist" class="checklist-grid"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const SKIP_KEY = 'cm_skipped_steps';
+function getSkipped() {
+    try { return JSON.parse(localStorage.getItem(SKIP_KEY) || '[]'); }
+    catch { return []; }
+}
+function addSkipped(stepId) {
+    const arr = getSkipped();
+    if (!arr.includes(stepId)) {
+        arr.push(stepId);
+        localStorage.setItem(SKIP_KEY, JSON.stringify(arr));
+    }
+    render();
+}
+function clearSkipped() {
+    localStorage.removeItem(SKIP_KEY);
+    render();
+}
+
+// Step definitions — each independently tracked.
+// 'required' steps gate the recommendation page; 'optional' can be skipped.
+function buildSteps(s) {
+    const items = s.items;
+    const minItemsDone = (items.top + items.bottom + items.shoes) >= 3
+        || (items.fullbody >= 1 && items.shoes >= 1);
+    return [
+        {
+            id: 'upload',
+            title: t('home.step.upload.title'),
+            cta: t('home.step.upload.cta'),
+            ctaHref: '/upload',
+            done: minItemsDone,
+            doneLabel: `${items.top}/1 top · ${items.bottom}/1 bottom · ${items.shoes}/1 shoes`,
+            required: true,
+            longDesc: t('home.step.upload.long'),
+        },
+        {
+            id: 'training',
+            title: t('home.step.training.title'),
+            cta: t('home.step.training.cta'),
+            ctaHref: '/training/temperature',
+            done: !!s.training_complete,
+            doneLabel: s.training_complete
+                ? t('home.step.training.done', { n: s.training_batches_done })
+                : t('home.step.training.todo', { done: s.training_batches_done, total: s.training_batches_total }),
+            required: true,
+            longDesc: t('home.step.training.long'),
+        },
+        {
+            id: 'location',
+            title: t('home.step.location.title'),
+            cta: t('home.step.location.cta'),
+            ctaHref: '/settings',
+            done: s.has_location,
+            doneLabel: s.has_location ? t('home.step.location.done') : t('home.step.location.todo'),
+            required: false,
+            longDesc: t('home.step.location.long'),
+        },
+    ];
+}
+
+function findFocusStep(steps) {
+    const skipped = getSkipped();
+    // Required steps always come first regardless of skip
+    const requiredUndone = steps.find(st => st.required && !st.done);
+    if (requiredUndone) return requiredUndone;
+    // Then optional steps that aren't skipped
+    return steps.find(st => !st.done && !skipped.includes(st.id)) || null;
+}
+
+function renderStoryboard(step) {
+    const skipBtn = step.required
+        ? ''
+        : `<a class="skip-link" href="#" data-skip="${step.id}">${t('home.skip_for_now')}</a>`;
+    return `
+        <div class="story-card">
+            <h1>${step.title}</h1>
+            <p class="sub">${step.longDesc}</p>
+            <a class="big-btn" href="${step.ctaHref}">${step.cta}</a>
+            ${skipBtn}
+        </div>
+    `;
+}
+
+function renderReady(s, items) {
+    const ratingHint = s.training_complete
+        ? t('home.ready_with_model')
+        : t('home.ready_pending_training');
+    const skipped = getSkipped();
+    const resumeLink = skipped.length
+        ? `<a class="skip-link" href="#" id="resumeSkipped">${t('home.review_skipped')}（${skipped.length}）</a>`
+        : '';
+    return `
+        <div class="story-card">
+            <h1>${t('home.ready_title')}</h1>
+            <p class="sub">${items}${t('home.items_unit')}${t('home.dot')}${ratingHint}</p>
+            <a class="big-btn" href="/recommend">${t('home.ready_cta')}</a>
+            ${resumeLink}
+        </div>
+    `;
+}
+
+function renderChecklistRow(step) {
+    const optTag = step.required ? '' : t('home.optional');
+    const mark = step.done
+        ? `<span class="check-mark done-mark">done</span>`
+        : `<span class="check-mark todo-mark">·</span>`;
+    return `
+        <a class="check-row ${step.done ? 'done' : 'todo'}" href="${step.ctaHref}">
+            <span class="check-text">
+                <b>${step.title}${optTag}</b>
+                <span class="desc">${step.doneLabel}</span>
+            </span>
+            ${mark}
+        </a>
+    `;
+}
+
+async function render() {
+    let s;
+    try { s = await fetch('/stats/home').then(r => r.json()); }
+    catch { return; }
+
+    const steps = buildSteps(s);
+    const focus = findFocusStep(steps);
+    const itemsTotal = s.items.top + s.items.bottom + s.items.shoes + s.items.accessory;
+    const minItemsDone = (s.items.top + s.items.bottom + s.items.shoes) >= 3;
+
+    const hero = document.getElementById('heroContent');
+    if (!minItemsDone || focus) {
+        hero.innerHTML = focus ? renderStoryboard(focus) : renderReady(s, itemsTotal);
+    } else {
+        hero.innerHTML = renderReady(s, itemsTotal);
+    }
+
+    // Always show full checklist below
+    const cl = document.getElementById('checklist');
+    cl.innerHTML = steps.map(renderChecklistRow).join('');
+    document.getElementById('checklistArea').style.display = '';
+
+    // wire up skip + resume
+    document.querySelectorAll('[data-skip]').forEach(el => {
+        el.addEventListener('click', (e) => {
+            e.preventDefault();
+            addSkipped(el.dataset.skip);
+        });
+    });
+    const resume = document.getElementById('resumeSkipped');
+    if (resume) {
+        resume.addEventListener('click', (e) => {
+            e.preventDefault();
+            clearSkipped();
+        });
+    }
+}
+
+render();
+window.onLanguageChange = render;
+</script>
+{% endblock %}

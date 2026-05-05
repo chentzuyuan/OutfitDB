@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block title %}ClosetMind · Training{% endblock %}
+{% block content %}
+<h1 data-i18n="train.title">Training</h1>
+
+<section class="panel" id="completedBanner" style="display:none;background:#e9f7ef;border-left:4px solid #2c8c4e;">
+    <p style="margin:0;color:#2c8c4e;" id="completedStats"></p>
+</section>
+
+<section class="panel" id="introPanel">
+    <p id="introText" data-i18n="train.intro">為了讓 AI 認識你的美感與體溫偏好，請完成 6 批 × 5 套穿搭的評分（共 30 套）。每套要勾選你的喜好，並選擇你覺得這套最適合的氣溫區間。</p>
+    <div class="train-progress">
+        <div class="train-progress-bar"><div id="trainProgressFill"></div></div>
+        <div class="train-progress-text" id="trainProgressText">0 / 6</div>
+    </div>
+    <button class="btn run-big" id="startBatchBtn" data-i18n="train.start_batch">開始下一批</button>
+    <a href="/recommend" id="goRecommendLink" class="btn secondary" style="display:none;margin-left:8px;" data-i18n="train.go_recommend">開始用 ClosetMind</a>
+</section>
+
+<section class="panel" id="batchPanel" style="display:none;">
+    <div class="batch-head">
+        <div>
+            <span class="batch-label" data-i18n="train.batch_label">第幾批</span>
+            <span class="batch-num" id="batchNum"></span>
+        </div>
+    </div>
+    <div id="batchOutfits" class="train-batch-grid"></div>
+    <div class="batch-foot">
+        <span id="batchFilledInfo"></span>
+        <button class="btn run-big" id="submitBatchBtn" disabled data-i18n="train.submit_batch">送出這批</button>
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+const TEMP_ZONES = [
+    { key: 'cold', label_zh: '冷 (<10°C)',     label_en: 'Cold (<10°C)' },
+    { key: 'cool', label_zh: '涼 (10–18°C)',  label_en: 'Cool (10–18°C)' },
+    { key: 'mild', label_zh: '溫 (18–25°C)',  label_en: 'Mild (18–25°C)' },
+    { key: 'warm', label_zh: '暖 (25–30°C)',  label_en: 'Warm (25–30°C)' },
+    { key: 'hot',  label_zh: '熱 (>30°C)',    label_en: 'Hot (>30°C)' },
+];
+function zoneLabel(key) {
+    const z = TEMP_ZONES.find(z => z.key === key);
+    if (!z) return key;
+    return window.getLang && window.getLang() === 'en' ? z.label_en : z.label_zh;
+}
+
+let currentBatch = null;  // { batch_idx, target_temp, outfits, context_id }
+const batchAnswers = new Map();  // outfit_id → { rating, ideal_temp_zone }
+
+async function refreshProgress() {
+    const r = await fetch('/training/progress');
+    if (!r.ok) return;
+    const p = await r.json();
+    const isEN = window.getLang && window.getLang() === 'en';
+    const pct = Math.min(100, Math.round((p.batches_done / p.total_batches) * 100));
+    document.getElementById('trainProgressFill').style.width = pct + '%';
+    const banner = document.getElementById('completedBanner');
+    const startBtn = document.getElementById('startBatchBtn');
+    const goLink = document.getElementById('goRecommendLink');
+    const introText = document.getElementById('introText');
+    if (p.completed) {
+        // Calibration done — show green banner, switch button label, expose "go to recommend" shortcut
+        banner.style.display = '';
+        document.getElementById('completedStats').textContent = isEN
+            ? `Calibration complete · ${p.ratings_done} ratings · model trained. You can keep practicing — every additional batch refines the model.`
+            : `校準完成 · ${p.ratings_done} 筆評分 · 模型已訓練。你可以繼續練習評分，每一批都會持續修正模型。`;
+        document.getElementById('trainProgressText').textContent = isEN
+            ? `Calibration done · ${p.ratings_done} ratings`
+            : `校準完成 · 共 ${p.ratings_done} 筆評分`;
+        startBtn.textContent = isEN ? 'Practice another batch' : '再評一批';
+        startBtn.style.display = '';
+        goLink.style.display = '';
+        if (introText) introText.style.display = 'none';
+    } else {
+        banner.style.display = 'none';
+        document.getElementById('trainProgressText').textContent = `${p.batches_done} / ${p.total_batches}`;
+        startBtn.style.display = '';
+        goLink.style.display = 'none';
+        if (introText) introText.style.display = '';
+    }
+}
+
+document.getElementById('startBatchBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('startBatchBtn');
+    btn.disabled = true;
+    btn.textContent = window.t ? window.t('train.loading') : '生成中…';
+    try {
+        const r = await fetch('/training/next_batch');
+        const data = await r.json();
+        if (!r.ok) {
+            alert((data.detail || 'Error'));
+            return;
+        }
+        currentBatch = data;
+        batchAnswers.clear();
+        renderBatch();
+        document.getElementById('introPanel').style.display = 'none';
+        document.getElementById('batchPanel').style.display = '';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    } finally {
+        btn.disabled = false;
+        btn.textContent = window.t ? window.t('train.start_batch') : '開始下一批';
+    }
+});
+
+function renderBatch() {
+    const isEN = window.getLang && window.getLang() === 'en';
+    const idx = currentBatch.batch_idx + 1;
+    document.getElementById('batchNum').textContent = idx > 6
+        ? (isEN ? `Practice round ${idx - 6}` : `練習第 ${idx - 6} 批`)
+        : `${idx} / 6`;
+    const grid = document.getElementById('batchOutfits');
+    grid.innerHTML = '';
+    if (!currentBatch.outfits || currentBatch.outfits.length === 0) {
+        grid.innerHTML = '<p style="color:#c33;padding:20px;text-align:center;">No outfits returned. Check console.</p>';
+        return;
+    }
+    console.log('renderBatch outfits:', currentBatch.outfits);
+    for (const o of currentBatch.outfits) {
+        try {
+        const card = document.createElement('div');
+        card.className = 'train-outfit-card';
+        card.dataset.outfitId = o.outfit_id;
+        const itemsHtml = (o.items || []).map(oi => {
+            const it = oi.item;
+            const img = it && it.image_path
+                ? `<img src="${it.image_path}" alt="${it.name}" />`
+                : `<div class="noimg-mini"></div>`;
+            return `<div class="mini">${img}<div class="mini-name">${it ? it.name : '#' + oi.item_id}</div></div>`;
+        }).join('');
+        card.innerHTML = `
+            <div class="train-outfit-items">${itemsHtml}</div>
+            <div class="train-outfit-rate">
+                <div class="rate-label">${t('train.aesthetic_label')}</div>
+                <div class="rate-row">
+                    <button class="rate-btn bad" data-r="-1">${t('train.rate.bad')}</button>
+                    <button class="rate-btn meh" data-r="0">${t('train.rate.meh')}</button>
+                    <button class="rate-btn ok" data-r="1">${t('train.rate.like')}</button>
+                </div>
+            </div>
+            <div class="train-outfit-zone">
+                <div class="rate-label">${t('train.zone_label')}</div>
+                <div class="zone-row">
+                    ${TEMP_ZONES.map(z => `<button class="zone-btn" data-z="${z.key}">${zoneLabel(z.key)}</button>`).join('')}
+                </div>
+            </div>
+        `;
+        // Rating buttons
+        card.querySelectorAll('button[data-r]').forEach(b => {
+            b.addEventListener('click', () => {
+                const oid = parseInt(card.dataset.outfitId);
+                const ans = batchAnswers.get(oid) || {};
+                ans.rating = parseInt(b.dataset.r);
+                batchAnswers.set(oid, ans);
+                card.querySelectorAll('button[data-r]').forEach(x => x.classList.remove('selected'));
+                b.classList.add('selected');
+                updateBatchSubmittable();
+            });
+        });
+        // Zone buttons
+        card.querySelectorAll('button[data-z]').forEach(b => {
+            b.addEventListener('click', () => {
+                const oid = parseInt(card.dataset.outfitId);
+                const ans = batchAnswers.get(oid) || {};
+                ans.ideal_temp_zone = b.dataset.z;
+                batchAnswers.set(oid, ans);
+                card.querySelectorAll('button[data-z]').forEach(x => x.classList.remove('selected'));
+                b.classList.add('selected');
+                updateBatchSubmittable();
+            });
+        });
+        grid.appendChild(card);
+        } catch (err) {
+            console.error('renderBatch outfit error:', err, o);
+            const errCard = document.createElement('div');
+            errCard.className = 'train-outfit-card';
+            errCard.style.background = '#ffe0e0';
+            errCard.textContent = `Render error for outfit ${o.outfit_id}: ${err.message}`;
+            grid.appendChild(errCard);
+        }
+    }
+    updateBatchSubmittable();
+}
+
+function updateBatchSubmittable() {
+    if (!currentBatch) return;
+    let filled = 0;
+    for (const o of currentBatch.outfits) {
+        const a = batchAnswers.get(o.outfit_id);
+        if (a && a.rating != null && a.ideal_temp_zone) filled++;
+    }
+    const total = currentBatch.outfits.length;
+    document.getElementById('batchFilledInfo').textContent = `${filled} / ${total}`;
+    document.getElementById('submitBatchBtn').disabled = filled < total;
+}
+
+document.getElementById('submitBatchBtn').addEventListener('click', async () => {
+    if (!currentBatch) return;
+    const btn = document.getElementById('submitBatchBtn');
+    btn.disabled = true;
+    btn.textContent = window.t ? window.t('train.submitting') : '送出中…';
+    try {
+        const ratings = [];
+        for (const o of currentBatch.outfits) {
+            const a = batchAnswers.get(o.outfit_id);
+            if (!a) continue;
+            ratings.push({
+                outfit_id: o.outfit_id,
+                rating: a.rating,
+                ideal_temp_zone: a.ideal_temp_zone,
+            });
+        }
+        const r = await fetch('/training/submit_batch', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target_temp: currentBatch.target_temp, ratings }),
+        });
+        const data = await r.json();
+        if (!r.ok) { alert(data.detail || 'Error'); return; }
+        currentBatch = null;
+        batchAnswers.clear();
+        document.getElementById('batchPanel').style.display = 'none';
+        document.getElementById('introPanel').style.display = '';
+        await refreshProgress();
+    } finally {
+        btn.disabled = false;
+        btn.textContent = window.t ? window.t('train.submit_batch') : '送出這批';
+    }
+});
+
+refreshProgress();
+window.onLanguageChange = () => {
+    refreshProgress();
+    if (currentBatch) renderBatch();
+};
+</script>
+{% endblock %}

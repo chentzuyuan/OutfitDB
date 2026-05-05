@@ -1,0 +1,29 @@
+# ─── Core (required) ────────────────────────────────────────────────────
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.12
+jinja2==3.1.4
+sqlalchemy==2.0.36
+pydantic==2.10.3
+pydantic-settings==2.6.1
+python-dotenv==1.0.1
+
+# ─── ML stack ──────────────────────────────────────────────────────────
+xgboost==2.1.3
+scikit-learn==1.5.2
+numpy==2.1.3
+pandas==2.2.3
+
+# ─── Image processing ──────────────────────────────────────────────────
+pillow==11.0.0
+
+# ─── External integrations ─────────────────────────────────────────────
+httpx==0.27.2          # async HTTP (server-side Open-Meteo if ever needed)
+
+# ─── Helper / training scripts (tools/) ────────────────────────────────
+# Used by tools/aesthetic_train.py, tools/llm_loop.py, tools/demo_showcase.py
+requests==2.33.1
+
+# ─── Optional ──────────────────────────────────────────────────────────
+# python-docx==1.2.0   # only if you regenerate docs via tools/build_docs.py
+# shap==0.51.0         # only for tools/shap_analyze.py feature-importance

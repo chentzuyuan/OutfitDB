@@ -1,0 +1,589 @@
+{% extends "base.html" %}
+{% block title %}ClosetMind · Upload{% endblock %}
+{% block content %}
+<h1 data-i18n="upload.title">上傳衣物</h1>
+
+<section class="panel">
+    <p style="color:#666;" data-i18n="upload.batch_intro">一次選最多 20 張照片，下方每列點選屬性即可。名稱會自動組成，可以點開來改。</p>
+    <div class="upload-pick-row">
+        <input id="batchInput" type="file" accept="image/*" multiple />
+        <span id="batchCount" class="hint"></span>
+    </div>
+    <!-- "No photo" path: skip image upload, just create N items with
+         metadata only. User can add photos later via Closet right-click. -->
+    <div style="margin-top:10px;padding-top:10px;border-top:1px dashed #ddd;">
+        <button class="btn secondary" id="addEmptyBtn" data-i18n="upload.add_empty">先不上傳照片,只新增資料</button>
+        <span style="color:#888;font-size:0.85rem;margin-left:10px;" data-i18n="upload.add_empty_hint">之後可在衣櫃右鍵每件補圖</span>
+    </div>
+</section>
+
+<div id="batchRows"></div>
+
+<section class="panel" id="submitPanel" style="display:none;">
+    <div style="display:flex; align-items:center; gap:14px;">
+        <div id="submitStatus" style="flex:1; color:#555; font-size:0.92rem;"></div>
+        <button class="btn run-big" id="submitAllBtn" data-i18n="upload.submit_all">送出全部</button>
+    </div>
+</section>
+
+<section class="panel" id="afterPanel" style="display:none;">
+    <h2 data-i18n="upload.what_next">下一步</h2>
+    <p id="afterSummary" style="color:#555;margin-bottom:14px;"></p>
+    <div class="upload-after-actions">
+        <button class="btn secondary" id="continueBtn" data-i18n="upload.continue">繼續上傳</button>
+        <a class="btn run-big" href="/training/temperature" data-i18n="upload.start_training">開始訓練</a>
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+// ─── option vocabularies ─────────────────────────────────────────────
+const COLOR_OPTIONS = [
+    {key:'black', hex:'#111'},
+    {key:'white', hex:'#f5f5f5'},
+    {key:'gray',  hex:'#888'},
+    {key:'navy',  hex:'#1b3c6f'},
+    {key:'blue',  hex:'#3a7bd5'},
+    {key:'brown', hex:'#7a4a2b'},
+    {key:'beige', hex:'#d8c9a6'},
+    {key:'green', hex:'#3a7d44'},
+    {key:'red',   hex:'#c94d4d'},
+    {key:'pink',  hex:'#f2a3c0'},
+    {key:'yellow',hex:'#f2d64b'},
+    {key:'orange',hex:'#f08a3e'},
+    {key:'purple',hex:'#7a4fae'},
+];
+const MATERIALS = ['cotton','wool','linen','polyester','denim','leather','silk','cashmere','nylon','fleece','other'];
+const THICKNESSES = ['very_thin','thin','thick','very_thick'];
+const SLEEVES = ['sleeveless','short','long'];
+const PANTS_LENGTHS = ['short','regular','long','full'];
+const COLLARS = ['crew','v','polo','turtleneck','hooded','button_down','shirt','spread'];
+const FITS = ['slim','regular','loose'];
+const PATTERNS = ['solid','striped','plaid','floral','graphic','checked','dotted','other'];
+
+// ─── name auto-gen ───────────────────────────────────────────────────
+function joinAnd(arr) {
+    if (arr.length === 0) return '';
+    if (arr.length === 1) return arr[0];
+    if (arr.length === 2) return arr.join(' and ');
+    return arr.slice(0, -1).join(', ') + ', and ' + arr[arr.length - 1];
+}
+function autoName(s) {
+    const colors = [...s.colors];
+    const colorPart = joinAnd(colors);
+    const mat = s.material || '';
+    let lengthPart = '';
+    if (s.category === 'top' || s.category === 'fullbody') lengthPart = s.sleeve || '';
+    else if (s.category === 'bottom') lengthPart = s.pants_length || '';
+    const parts = [colorPart, mat, lengthPart, s.category].filter(Boolean);
+    const out = parts.join(' ').trim();
+    return out || 'New item';
+}
+
+// ─── state ───────────────────────────────────────────────────────────
+const rows = [];  // each: { file, dom, state, status }
+
+function defaultState(file) {
+    return {
+        file,
+        nameOverridden: false,
+        name: '',
+        category: 'top',
+        colors: new Set(),
+        material: 'cotton',
+        // null = item is 100% `material`; or an array like
+        // [{material:'cotton', pct:40}, {material:'linen', pct:60}] (must sum to 100).
+        composition: null,
+        thickness: 'thin',
+        pattern: 'solid',
+        sleeve: 'short',
+        pants_length: '',
+        pants_fit: '',
+        collar: '',
+        shoulder_fit: '',
+        waist_fit: '',
+        top_length: '',
+        can_wear_alone: true,
+    };
+}
+
+function recomputeName(row) {
+    if (!row.state.nameOverridden) {
+        row.state.name = autoName(row.state);
+        const inp = row.dom.querySelector('.row-name');
+        if (inp && document.activeElement !== inp) inp.value = row.state.name;
+    }
+}
+
+// ─── chip / select builders ──────────────────────────────────────────
+function chipPicker(values, selected, onPick, valueLabelFn = v => v) {
+    // returns DOM with chip buttons; selected is a Set or single value
+    const wrap = document.createElement('div');
+    wrap.className = 'row-chips';
+    values.forEach(v => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'row-chip';
+        btn.textContent = valueLabelFn(v);
+        const isSel = (selected instanceof Set) ? selected.has(v) : selected === v;
+        if (isSel) btn.classList.add('active');
+        btn.addEventListener('click', () => {
+            onPick(v, btn);
+            // re-paint active state
+            wrap.querySelectorAll('.row-chip').forEach(b => b.classList.remove('active'));
+            if (selected instanceof Set) {
+                values.forEach(vv => {
+                    const idx = values.indexOf(vv);
+                    if (selected.has(vv)) wrap.children[idx].classList.add('active');
+                });
+            } else {
+                const idx = values.indexOf(selected);
+                if (idx >= 0) wrap.children[idx].classList.add('active');
+            }
+        });
+        wrap.appendChild(btn);
+    });
+    return wrap;
+}
+
+function colorChips(state, onChange) {
+    const wrap = document.createElement('div');
+    wrap.className = 'row-color-chips';
+    COLOR_OPTIONS.forEach(c => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'row-color-chip';
+        b.style.background = c.hex;
+        b.title = c.key;
+        if (state.colors.has(c.key)) b.classList.add('active');
+        b.addEventListener('click', () => {
+            if (state.colors.has(c.key)) state.colors.delete(c.key);
+            else state.colors.add(c.key);
+            b.classList.toggle('active');
+            onChange();
+        });
+        wrap.appendChild(b);
+    });
+    return wrap;
+}
+
+function selectField(label, values, current, onChange, valueLabelFn = v => v) {
+    const wrap = document.createElement('label');
+    wrap.className = 'row-select';
+    const span = document.createElement('span'); span.textContent = label;
+    const sel = document.createElement('select');
+    sel.innerHTML = '<option value="">—</option>' +
+        values.map(v => `<option value="${v}"${v === current ? ' selected' : ''}>${valueLabelFn(v)}</option>`).join('');
+    sel.addEventListener('change', () => onChange(sel.value));
+    wrap.append(span, sel);
+    return wrap;
+}
+
+// ─── Composition (fabric blend) widget ───────────────────────────────
+// state.composition === null  →  single-material mode (use state.material)
+// state.composition = [...]   →  blend mode, list of {material, pct}
+//
+// In blend mode the primary `state.material` always mirrors the entry
+// with the highest pct (consistent with backend normalization).
+function compositionField(state, onUpdate) {
+    const wrap = document.createElement('div');
+    wrap.className = 'comp-field row-select';
+
+    const label = document.createElement('span');
+    label.textContent = 'Material';
+    wrap.appendChild(label);
+
+    const inner = document.createElement('div');
+    inner.className = 'comp-inner';
+    wrap.appendChild(inner);
+
+    function syncPrimaryMaterial() {
+        if (!state.composition || state.composition.length === 0) return;
+        const top = state.composition.slice().sort((a, b) => b.pct - a.pct)[0];
+        state.material = top.material;
+    }
+
+    function render() {
+        inner.innerHTML = '';
+        if (!state.composition) {
+            // Single-material mode: dropdown + "Make blend" link
+            const sel = document.createElement('select');
+            sel.innerHTML = MATERIALS.map(m =>
+                `<option ${m === state.material ? 'selected' : ''}>${m}</option>`
+            ).join('');
+            sel.addEventListener('change', () => { state.material = sel.value; onUpdate(); });
+            const blendBtn = document.createElement('button');
+            blendBtn.type = 'button';
+            blendBtn.className = 'comp-blend-btn';
+            blendBtn.textContent = '+ Blend';
+            blendBtn.title = 'Add another material to make a blend';
+            blendBtn.addEventListener('click', () => {
+                const second = state.material === 'polyester' ? 'cotton' : 'polyester';
+                state.composition = [
+                    { material: state.material, pct: 50 },
+                    { material: second, pct: 50 },
+                ];
+                syncPrimaryMaterial();
+                render();
+                onUpdate();
+            });
+            inner.append(sel, blendBtn);
+            return;
+        }
+        // Blend mode: list of (material + pct) rows + add / sum
+        state.composition.forEach((entry, i) => {
+            const row = document.createElement('div');
+            row.className = 'comp-row';
+            const sel = document.createElement('select');
+            sel.className = 'comp-material';
+            sel.innerHTML = MATERIALS.map(m =>
+                `<option ${m === entry.material ? 'selected' : ''}>${m}</option>`
+            ).join('');
+            sel.addEventListener('change', () => {
+                state.composition[i].material = sel.value;
+                syncPrimaryMaterial();
+                onUpdate();
+            });
+            const pct = document.createElement('input');
+            pct.type = 'number';
+            pct.min = '1'; pct.max = '100';
+            pct.value = entry.pct;
+            pct.className = 'comp-pct';
+            pct.addEventListener('input', () => {
+                state.composition[i].pct = parseInt(pct.value, 10) || 0;
+                syncPrimaryMaterial();
+                renderSum();
+                onUpdate();
+            });
+            const pctSign = document.createElement('span');
+            pctSign.textContent = '%';
+            pctSign.className = 'comp-pct-sign';
+            const removable = state.composition.length > 1;
+            const rm = document.createElement('button');
+            rm.type = 'button';
+            rm.className = 'comp-remove';
+            rm.textContent = '−';
+            rm.title = removable ? 'Remove' : 'Cannot remove the only material';
+            rm.disabled = !removable;
+            rm.addEventListener('click', () => {
+                state.composition.splice(i, 1);
+                if (state.composition.length === 1) {
+                    // Falling back to single-material mode — drop composition,
+                    // keep the surviving material as the primary.
+                    state.material = state.composition[0].material;
+                    state.composition = null;
+                } else {
+                    syncPrimaryMaterial();
+                }
+                render();
+                onUpdate();
+            });
+            row.append(sel, pct, pctSign, rm);
+            inner.appendChild(row);
+        });
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'comp-add';
+        addBtn.textContent = '+ Add material';
+        addBtn.addEventListener('click', () => {
+            state.composition.push({ material: 'other', pct: 0 });
+            render();
+            onUpdate();
+        });
+        inner.appendChild(addBtn);
+        const sum = document.createElement('span');
+        sum.className = 'comp-sum';
+        inner.appendChild(sum);
+        function renderSum() {
+            const total = state.composition.reduce((a, c) => a + (parseInt(c.pct, 10) || 0), 0);
+            sum.textContent = `${total}%`;
+            sum.classList.toggle('bad', total !== 100);
+            sum.title = total === 100 ? 'OK' : 'Must sum to 100%';
+        }
+        renderSum();
+    }
+
+    render();
+    return wrap;
+}
+
+// ─── render a single row ─────────────────────────────────────────────
+// `file` may be null when user picks the "no photo" path — render a
+// placeholder thumbnail so the row layout still works.
+function makeRow(file, idx) {
+    const state = defaultState(file);
+    const row = document.createElement('div');
+    row.className = 'batch-row';
+    row.dataset.idx = idx;
+
+    const thumb = document.createElement('div');
+    thumb.className = 'batch-thumb';
+    if (file) {
+        const url = URL.createObjectURL(file);
+        thumb.innerHTML = `<img src="${url}" alt="${file.name}" />`;
+    } else {
+        thumb.innerHTML = '<div class="noimg-mini" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f0f0f0;color:#888;font-size:0.78rem;border-radius:6px;">no image</div>';
+    }
+
+    const fields = document.createElement('div');
+    fields.className = 'batch-fields';
+
+    // Status badge (top right)
+    const statusEl = document.createElement('span');
+    statusEl.className = 'batch-status';
+    statusEl.textContent = '';
+    row.appendChild(statusEl);
+
+    const obj = { file, dom: row, state, status: 'pending' };
+
+    function rerender() {
+        renderFields(obj, fields);
+        recomputeName(obj);
+    }
+    rerender();
+
+    row.append(thumb, fields);
+    return obj;
+}
+
+function renderFields(row, container) {
+    const s = row.state;
+    container.innerHTML = '';
+
+    // Category
+    const catRow = document.createElement('div');
+    catRow.className = 'batch-line';
+    catRow.append(selectField('Category', ['top','bottom','shoes','accessory','fullbody'], s.category, v => {
+        s.category = v;
+        renderFields(row, container);
+        recomputeName(row);
+    }));
+    container.appendChild(catRow);
+
+    // Common: colors
+    const colorRow = document.createElement('div');
+    colorRow.className = 'batch-line';
+    const lblC = document.createElement('span'); lblC.className = 'batch-line-label'; lblC.textContent = 'Colors';
+    colorRow.append(lblC, colorChips(s, () => recomputeName(row)));
+    container.appendChild(colorRow);
+
+    // Common: material (with optional blend) + thickness + pattern
+    const matRow = document.createElement('div');
+    matRow.className = 'batch-line';
+    matRow.append(
+        compositionField(s, () => recomputeName(row)),
+        selectField('Thickness', THICKNESSES, s.thickness, v => { s.thickness = v; recomputeName(row); }),
+        selectField('Pattern', PATTERNS, s.pattern, v => { s.pattern = v; recomputeName(row); }),
+    );
+    container.appendChild(matRow);
+
+    // Category-specific
+    if (s.category === 'top' || s.category === 'fullbody') {
+        const topRow = document.createElement('div');
+        topRow.className = 'batch-line';
+        topRow.append(
+            selectField('Sleeve', SLEEVES, s.sleeve, v => { s.sleeve = v; recomputeName(row); }),
+            selectField('Collar', COLLARS, s.collar, v => { s.collar = v; }),
+            selectField('Fit (shoulder)', FITS, s.shoulder_fit, v => { s.shoulder_fit = v; }),
+        );
+        container.appendChild(topRow);
+
+        const aloneRow = document.createElement('div');
+        aloneRow.className = 'batch-line';
+        const aloneLabel = document.createElement('label');
+        aloneLabel.className = 'row-check';
+        aloneLabel.innerHTML = `<input type="checkbox" ${s.can_wear_alone ? 'checked' : ''} /> Can wear alone`;
+        aloneLabel.querySelector('input').addEventListener('change', e => {
+            s.can_wear_alone = e.target.checked;
+        });
+        aloneRow.append(aloneLabel);
+        container.appendChild(aloneRow);
+    }
+    if (s.category === 'bottom' || s.category === 'fullbody') {
+        const botRow = document.createElement('div');
+        botRow.className = 'batch-line';
+        botRow.append(
+            selectField('Pants length', PANTS_LENGTHS, s.pants_length, v => { s.pants_length = v; recomputeName(row); }),
+            selectField('Pants fit', FITS, s.pants_fit, v => { s.pants_fit = v; }),
+        );
+        container.appendChild(botRow);
+    }
+
+    // Name (last line, editable)
+    const nameRow = document.createElement('div');
+    nameRow.className = 'batch-line batch-name-line';
+    const lblN = document.createElement('span'); lblN.className = 'batch-line-label'; lblN.textContent = 'Name';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'row-name';
+    inp.value = s.name;
+    inp.addEventListener('input', () => {
+        s.nameOverridden = (inp.value.trim() !== autoName(s));
+        s.name = inp.value;
+    });
+    nameRow.append(lblN, inp);
+    container.appendChild(nameRow);
+}
+
+// ─── file input handler ─────────────────────────────────────────────
+const batchInput = document.getElementById('batchInput');
+const batchRows = document.getElementById('batchRows');
+const batchCount = document.getElementById('batchCount');
+const submitPanel = document.getElementById('submitPanel');
+
+batchInput.addEventListener('change', () => {
+    rows.length = 0;
+    batchRows.innerHTML = '';
+    const files = [...batchInput.files].slice(0, 20);
+    if (files.length === 0) {
+        submitPanel.style.display = 'none';
+        batchCount.textContent = '';
+        return;
+    }
+    files.forEach((f, i) => {
+        const row = makeRow(f, i);
+        rows.push(row);
+        batchRows.appendChild(row.dom);
+    });
+    batchCount.textContent = `${files.length} photos selected${batchInput.files.length > 20 ? ' (max 20, extra ignored)' : ''}`;
+    submitPanel.style.display = '';
+});
+
+// "Add items without photos" — same row layout but file=null. User fills
+// the metadata, submits, then later goes to closet → right-click →
+// "Update image" to attach the actual photo.
+document.getElementById('addEmptyBtn').addEventListener('click', () => {
+    const isEN = window.getLang && window.getLang() === 'en';
+    const promptMsg = isEN
+        ? 'How many items do you want to add (without photos)?'
+        : '想新增幾件衣服(不上傳照片)?';
+    const raw = prompt(promptMsg, '3');
+    if (raw == null) return;
+    const n = Math.max(1, Math.min(20, parseInt(raw, 10) || 0));
+    if (!n) return;
+    rows.length = 0;
+    batchRows.innerHTML = '';
+    batchInput.value = '';  // clear any previously-selected files so state is consistent
+    for (let i = 0; i < n; i++) {
+        const row = makeRow(null, i);
+        rows.push(row);
+        batchRows.appendChild(row.dom);
+    }
+    batchCount.textContent = isEN
+        ? `${n} items, no photos (you can add photos later via Closet)`
+        : `${n} 件,不含照片(之後可在衣櫃右鍵每件補圖)`;
+    submitPanel.style.display = '';
+});
+
+// ─── submit all ──────────────────────────────────────────────────────
+async function postRow(row) {
+    const s = row.state;
+    const fd = new FormData();
+    fd.append('name', s.name || autoName(s));
+    fd.append('category', s.category);
+    fd.append('thickness', s.thickness);
+    fd.append('material', s.material);
+    if (s.composition && s.composition.length > 1) {
+        // Only send composition when it's a real blend (≥2 entries).
+        // Single-material items leave composition null so backend records
+        // them in the simpler legacy form.
+        fd.append('composition', JSON.stringify(s.composition));
+    }
+    fd.append('pattern', s.pattern);
+    fd.append('pattern_complexity', '0');
+    fd.append('colors', JSON.stringify([...s.colors]));
+    fd.append('style_tags', '[]');
+    fd.append('is_multicolor', s.colors.size > 1 ? 'true' : 'false');
+    fd.append('can_wear_alone', s.can_wear_alone ? 'true' : 'false');
+    if (s.category === 'top' || s.category === 'fullbody') {
+        if (s.sleeve) fd.append('sleeve', s.sleeve);
+        if (s.collar) fd.append('collar', s.collar);
+        if (s.shoulder_fit) fd.append('shoulder_fit', s.shoulder_fit);
+        if (s.waist_fit) fd.append('waist_fit', s.waist_fit);
+        if (s.top_length) fd.append('top_length', s.top_length);
+    }
+    if (s.category === 'bottom' || s.category === 'fullbody') {
+        if (s.pants_length) fd.append('pants_length', s.pants_length);
+        if (s.pants_fit) fd.append('pants_fit', s.pants_fit);
+    }
+    if (s.file) fd.append('image', s.file, s.file.name);
+    const res = await fetch('/items/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    return { ok: res.ok, data };
+}
+
+document.getElementById('submitAllBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('submitAllBtn');
+    const status = document.getElementById('submitStatus');
+    // Pre-flight check: any blend in any row must sum to exactly 100%
+    const badRows = [];
+    for (let i = 0; i < rows.length; i++) {
+        const s = rows[i].state;
+        if (s.composition && s.composition.length > 1) {
+            const total = s.composition.reduce((a, c) => a + (parseInt(c.pct, 10) || 0), 0);
+            if (total !== 100) badRows.push(i + 1);
+        }
+    }
+    if (badRows.length > 0) {
+        status.textContent = `Cannot submit — blend percentages must sum to 100% on row(s): ${badRows.join(', ')}`;
+        return;
+    }
+    btn.disabled = true;
+    let ok = 0, fail = 0;
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.status === 'done') continue;
+        row.dom.querySelector('.batch-status').textContent = 'uploading…';
+        row.dom.classList.add('uploading');
+        status.textContent = `Uploading ${i+1} / ${rows.length}…`;
+        try {
+            const r = await postRow(row);
+            if (r.ok) {
+                row.status = 'done';
+                row.dom.querySelector('.batch-status').textContent = `done (#${r.data.id})`;
+                row.dom.classList.remove('uploading');
+                row.dom.classList.add('uploaded');
+                ok++;
+            } else {
+                row.status = 'failed';
+                row.dom.querySelector('.batch-status').textContent = `failed: ${r.data.detail || ''}`;
+                row.dom.classList.remove('uploading');
+                row.dom.classList.add('failed');
+                fail++;
+            }
+        } catch (e) {
+            row.status = 'failed';
+            row.dom.querySelector('.batch-status').textContent = `error: ${e.message}`;
+            row.dom.classList.add('failed');
+            fail++;
+        }
+    }
+    status.textContent = `Done: ${ok} ok, ${fail} failed.`;
+    btn.disabled = false;
+
+    // show "what next" panel
+    const after = document.getElementById('afterPanel');
+    after.style.display = '';
+    document.getElementById('afterSummary').textContent =
+        fail === 0
+            ? (window.getLang && window.getLang() === 'en'
+                ? `${ok} items uploaded. You can keep uploading or start training now.`
+                : `已上傳 ${ok} 件衣物。可以繼續上傳，也可以直接去訓練。`)
+            : (window.getLang && window.getLang() === 'en'
+                ? `${ok} ok, ${fail} failed. Fix the failed rows above and retry, or continue.`
+                : `成功 ${ok} 件、失敗 ${fail} 件。可重試上方失敗列，或繼續。`);
+    after.scrollIntoView({ behavior: 'smooth' });
+});
+
+document.getElementById('continueBtn').addEventListener('click', () => {
+    rows.length = 0;
+    batchRows.innerHTML = '';
+    batchInput.value = '';
+    batchCount.textContent = '';
+    document.getElementById('submitPanel').style.display = 'none';
+    document.getElementById('afterPanel').style.display = 'none';
+    document.getElementById('submitStatus').textContent = '';
+    batchInput.focus();
+});
+</script>
+{% endblock %}

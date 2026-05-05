@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: closetmind
+    runtime: python
+    plan: free
+    rootDir: closetmind
+    buildCommand: pip install -r requirements.txt
+    # Bind to 0.0.0.0:$PORT so Render's reverse proxy can reach it.
+    # No --workers flag: free tier has 512MB RAM and a single uvicorn
+    # worker is plenty for a class demo.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # Demo-mode flag — read by app/main.py lifespan to:
+      #   1. seed the bundled Tester profile into a writable dir
+      #   2. force active=Tester (skip the /setup welcome screen)
+      #   3. surface "demo only" notices for actions that need persistent
+      #      storage / on-disk model files (photo upload, retraining).
+      - key: CLOSETMIND_RENDER_MODE
+        value: "1"
+      # Render's filesystem is ephemeral on free tier and `/tmp` survives
+      # the request lifecycle. Each cold start (after 15min idle) gets a
+      # fresh container and re-seeds Tester from the deployed snapshot —
+      # exactly what we want for "every visitor sees a clean wardrobe".
+      - key: CLOSETMIND_PROFILES_ROOT
+        value: "/tmp/closetmind/profiles"

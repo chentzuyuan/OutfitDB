@@ -1,0 +1,676 @@
+{% extends "base.html" %}
+{% block title %}ClosetMind · 今日推薦{% endblock %}
+{% block content %}
+<h1 data-i18n="rec.title">今日推薦</h1>
+<div id="trainingGate" class="banner" style="display:none;">
+    <b data-i18n="rec.gate_title">尚未完成訓練</b>
+    — <span data-i18n="rec.gate_desc">完成 6 批校準後才能得到準確的推薦</span>
+    <a href="/training/temperature" class="btn secondary" style="margin-left:auto;" data-i18n="rec.gate_cta">前往訓練</a>
+</div>
+
+<section class="panel run-panel">
+    <div class="run-row">
+        <button class="btn run-big" id="runBtn" data-i18n="rec.run_btn">執行今日推薦</button>
+        <label class="topk-box"><span data-i18n="rec.topk_label">推薦數</span> <input id="topK" type="number" value="5" min="1" max="20" /></label>
+        <!-- Quick occasion picker. Most-likely-to-change context attribute,
+             so it lives here next to the run button rather than buried in
+             the manual ctx editor. The hidden form down below also has an
+             occasion select for advanced overrides; this one wins by being
+             checked first when a "casual default" auto-context is built. -->
+        <label class="topk-box">
+            <span data-i18n="rec.occasion_label">場合</span>
+            <select id="quickOccasion">
+                <option value="casual" data-i18n="enum.occasion.casual">casual 休閒</option>
+                <option value="work" data-i18n="enum.occasion.work">work 上班</option>
+                <option value="formal" data-i18n="enum.occasion.formal">formal 正式</option>
+                <option value="sport" data-i18n="enum.occasion.sport">sport 運動</option>
+                <option value="home" data-i18n="enum.occasion.home">home 在家</option>
+            </select>
+        </label>
+    </div>
+    <div class="ctx-summary" id="ctxInfo" style="margin-top:12px;color:#555;font-size:0.92rem;"></div>
+    <details id="forceDetails" style="margin-top:14px;" open>
+        <summary style="cursor:pointer;color:#444;font-size:0.92rem;font-weight:600;">
+            <span data-i18n="rec.force_include_summary">強制加入指定衣物（可複選）</span>
+            <span id="forceCount" class="force-count"></span>
+        </summary>
+        <div class="force-toolbar" style="margin-top:8px;">
+            <select id="forceCatFilter">
+                <option value="" data-i18n="closet.all_categories">全部類別</option>
+                <option value="top">top</option>
+                <option value="bottom">bottom</option>
+                <option value="shoes">shoes</option>
+                <option value="accessory">accessory</option>
+            </select>
+            <button class="btn secondary" id="forceClear" type="button" data-i18n="rec.force_clear">清空選擇</button>
+        </div>
+        <div id="forceGrid" class="force-grid"></div>
+    </details>
+
+    <details id="ctxDetails" style="margin-top:10px;">
+        <summary style="cursor:pointer;color:#777;font-size:0.88rem;" data-i18n="rec.manual_summary">手動修改情境（進階）</summary>
+        <form id="ctxForm" class="grid" style="margin-top:10px;">
+            <label><span data-i18n="form.date">日期</span> <input name="date" type="date" required /></label>
+            <label><span data-i18n="form.temperature">氣溫 (°C)</span> <input name="temperature" type="number" step="0.1" data-i18n-attr="placeholder:form.temp_ph" placeholder="留空 = 自動抓" /></label>
+            <label><span data-i18n="form.temperature_high">白天高溫</span> <input name="temperature_high" type="number" step="0.1" data-i18n-attr="placeholder:form.auto" placeholder="自動" /></label>
+            <label><span data-i18n="form.temperature_low">夜間低溫</span> <input name="temperature_low" type="number" step="0.1" data-i18n-attr="placeholder:form.auto" placeholder="自動" /></label>
+            <label><span data-i18n="form.weather">天氣</span>
+                <select name="weather">
+                    <option value="" data-i18n="form.auto">自動</option>
+                    <option value="sunny" data-i18n="enum.weather.sunny">晴</option>
+                    <option value="cloudy" data-i18n="enum.weather.cloudy">陰</option>
+                    <option value="rainy" data-i18n="enum.weather.rainy">雨</option>
+                    <option value="snowy" data-i18n="enum.weather.snowy">雪</option>
+                    <option value="windy" data-i18n="enum.weather.windy">風</option>
+                </select>
+            </label>
+            <label><span data-i18n="form.occasion">場合</span>
+                <select name="occasion">
+                    <option value="casual" data-i18n="enum.occasion.casual">casual 休閒</option>
+                    <option value="work" data-i18n="enum.occasion.work">work 上班</option>
+                    <option value="formal" data-i18n="enum.occasion.formal">formal 正式</option>
+                    <option value="sport" data-i18n="enum.occasion.sport">sport 運動</option>
+                    <option value="home" data-i18n="enum.occasion.home">home 居家</option>
+                </select>
+            </label>
+            <label><span data-i18n="form.notes">備註</span> <input name="notes" data-i18n-attr="placeholder:form.notes_ph" placeholder="選填" /></label>
+            <button class="btn secondary" type="submit" style="grid-column:1 / -1;" data-i18n="form.save_run">儲存並執行</button>
+        </form>
+    </details>
+</section>
+
+<div id="rejectHint" class="rec-reject-hint" data-i18n="rec.reject_hint" style="display:none;">看到不喜歡的穿搭，按右側「不喜歡」就會消失並扣分。模型會在背景立刻重新訓練。</div>
+<div id="recs"></div>
+<div id="regenerate" style="display:none;text-align:center;padding:20px;">
+    <p data-i18n="rec.all_rejected">這批都不喜歡？</p>
+    <button class="btn run-big" id="regenerateBtn" data-i18n="rec.regenerate">重新生成</button>
+</div>
+<div id="cmToast" class="cm-toast"></div>
+
+<div id="modifyModal" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+        <div class="modal-head">
+            <h3 data-i18n="rec.modal.title">修改穿搭</h3>
+            <button class="modal-close" id="cancelModify" aria-label="Close">X</button>
+        </div>
+        <p class="modal-hint" data-i18n="rec.modal.hint">點各列「換」可挑替換、「移除」可拿掉。完成後送出，會建一筆新的 outfit + 評分為 1。</p>
+        <div id="modifyItems"></div>
+        <button class="btn secondary" id="addItemBtn" style="margin-top:8px;" data-i18n="rec.modal.add_item">+ 加入衣物</button>
+        <div id="modifyMeta" class="modify-meta"></div>
+        <div id="itemPicker" class="item-picker" style="display:none;">
+            <div class="picker-head">
+                <span id="pickerTitle" data-i18n="rec.modal.picker_title">選擇衣物</span>
+                <button class="modal-close" id="closePicker">X</button>
+            </div>
+            <select id="pickerCatFilter" style="margin-bottom:8px;">
+                <option value="top">top</option>
+                <option value="bottom">bottom</option>
+                <option value="shoes">shoes</option>
+                <option value="accessory">accessory</option>
+            </select>
+            <div id="pickerGrid" class="picker-grid"></div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn secondary" id="cancelModify2" data-i18n="rec.modal.cancel">取消</button>
+            <button class="btn" id="confirmModify" data-i18n="rec.modal.confirm">確認修改 (評分 +1)</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/weather.js"></script>
+<script>
+// ─── Toast helper (used for "model updated" notifications) ───
+let _toastTimer = null;
+function showToast(msg, durationMs = 2400) {
+    const t = document.getElementById('cmToast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    if (_toastTimer) clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => t.classList.remove('show'), durationMs);
+}
+
+// ─── Background retrain: triggered after a rejection so the model
+// immediately learns from the -1 signal. Debounced so multiple rejects
+// in quick succession only fire one retrain. ───
+let _retrainTimer = null;
+let _retrainInFlight = false;
+function triggerBackgroundRetrain() {
+    if (_retrainTimer) clearTimeout(_retrainTimer);
+    _retrainTimer = setTimeout(async () => {
+        if (_retrainInFlight) return;
+        _retrainInFlight = true;
+        showToast(t('rec.toast_retraining'));
+        try {
+            const r = await fetch('/train/', { method: 'POST' });
+            if (r.ok) {
+                const data = await r.json();
+                showToast(t('rec.toast_retrained', { n: data.training_samples || '?' }), 3000);
+            }
+        } catch (e) {
+            // Silent fail — user can keep using the page
+        } finally {
+            _retrainInFlight = false;
+        }
+    }, 800);  // debounce 800ms — gather rapid clicks together
+}
+
+async function autoFillWeatherIfNeeded(body) {
+    const needTemp = body.temperature == null;
+    const needHigh = body.temperature_high == null;
+    const needLow = body.temperature_low == null;
+    const needWeather = !body.weather;
+    if (!needTemp && !needHigh && !needLow && !needWeather) return null;
+
+    const settings = await window.getUserSettings();
+    if (!settings || settings.lat == null || settings.lon == null) return { skipped: t('rec.location_not_set') };
+    const w = await window.fetchWeather(settings.lat, settings.lon, body.date);
+    if (!w) return { skipped: t('rec.weather_fetch_failed') };
+    if (needTemp && w.temperature != null) body.temperature = w.temperature;
+    if (needHigh) body.temperature_high = w.temperature_high;
+    if (needLow) body.temperature_low = w.temperature_low;
+    if (needWeather) body.weather = w.weather;
+    return { filled: w };
+}
+
+function fmtCtx(c, weatherInfo) {
+    const d = new Date(c.date).toLocaleDateString();
+    const parts = [`#${c.id}`, d];
+    if (c.temperature != null) parts.push(window.cm.formatTemp(c.temperature));
+    if (c.temperature_high != null || c.temperature_low != null) {
+        const h = c.temperature_high != null ? window.cm.formatTempInt(c.temperature_high) : '—';
+        const l = c.temperature_low != null ? window.cm.formatTempInt(c.temperature_low) : '—';
+        parts.push(`H${h} / L${l}${window.cm.tempUnitSymbol()}`);
+    }
+    if (c.weather) parts.push(c.weather);
+    if (c.occasion) parts.push(c.occasion);
+    let s = parts.filter(Boolean).join(' · ');
+    if (weatherInfo && weatherInfo.filled) s = t('rec.weather_filled') + ' · ' + s;
+    return s;
+}
+
+function checkAllRejected() {
+    const recsEl = document.getElementById('recs');
+    const regen = document.getElementById('regenerate');
+    if (recsEl.children.length === 0 && lastCtxId != null) {
+        regen.style.display = 'block';
+    }
+}
+
+let lastCtxId = null;
+
+function renderRecs(data, ctxId) {
+    lastCtxId = ctxId;
+    const recs = document.getElementById('recs');
+    document.getElementById('regenerate').style.display = 'none';
+    // Show the "click dislike to penalize" hint banner once there are recs
+    const hint = document.getElementById('rejectHint');
+    if (hint) hint.style.display = data && data.length ? '' : 'none';
+    recs.innerHTML = '';
+    for (const [idx, entry] of data.entries()) {
+        const o = entry.outfit;
+        const items = o.outfit_items.map(oi => {
+            const it = oi.item;
+            const img = it?.image_path ? `<img src="${it.image_path}" />` : '';
+            return `<div class="mini">${img}<div>${it?.name ?? '#'+oi.item_id}</div></div>`;
+        }).join('');
+        const card = document.createElement('div');
+        card.className = 'rec-card';
+        const explainText = (entry.explanation_codes || [])
+            .map(c => t(c.key, c.vars || {}))
+            .join(t('expl.sep')) || (entry.explanation || '');
+        card.innerHTML = `
+            <h3>#${idx+1} · ${t('rec.total_score')} ${entry.total_score.toFixed(3)}</h3>
+            <div class="scores">
+                pref ${entry.preference_score.toFixed(2)} · ctx ${entry.context_fit_score.toFixed(2)} ·
+                fresh ${entry.freshness_score.toFixed(2)} · div ${entry.diversity_score.toFixed(2)} ·
+                rec ${entry.recovery_score.toFixed(2)}
+            </div>
+            <div class="explain">${explainText}</div>
+            <div class="mini-grid">${items}</div>
+            <div class="curves">
+                ${t('rec.curve_coverage')}: ${(o.coverage_curve||[]).map(v=>v.toFixed(1)).join(' / ')}<br/>
+                ${t('rec.curve_aesthetic')}: ${(o.aesthetic_curve||[]).map(v=>v.toFixed(0)).join(' / ')}<br/>
+                ${t('rec.curve_optimal_k')}=${o.optimal_layer_count ?? '—'} · ${t('rec.curve_overkill')}=${o.overkill_layers} · ${t('rec.curve_stops')}=${JSON.stringify(o.aesthetic_stop_layers)}
+            </div>
+            <div class="actions rec-actions-row">
+                <div class="rec-actions-main">
+                    <button class="rec-act ok" data-act="accepted">${t('rec.act.accept')}</button>
+                    <button class="rec-act mod" data-act="modified">${t('rec.act.modify')}</button>
+                </div>
+                <button class="rec-act-reject" data-act="rejected" title="${t('rec.act.reject')}">${t('rec.act.reject_short')}</button>
+                <span class="logged"></span>
+            </div>
+        `;
+        card.querySelectorAll('button[data-act]').forEach(b => {
+            b.addEventListener('click', async () => {
+                const act = b.dataset.act;
+                if (act === 'modified') {
+                    openModify(ctxId, o, card);
+                    return;
+                }
+                const body = {
+                    context_id: ctxId,
+                    recommended_outfit_id: o.id,
+                    final_worn_outfit_id: act === 'rejected' ? null : o.id,
+                    user_action: act,
+                };
+                const r = await fetch('/recommendations/log', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const rd = await r.json();
+                if (r.ok) {
+                    if (act === 'rejected') {
+                        // Fade out + remove the card, track rejection count
+                        card.classList.add('rejected-fade');
+                        setTimeout(() => {
+                            card.remove();
+                            checkAllRejected();
+                        }, 300);
+                        // Background retrain: fire-and-forget so the user gets
+                        // immediate model adaptation from this -1 signal.
+                        triggerBackgroundRetrain();
+                        return;
+                    }
+                    const ratingMsg = act === 'accepted' ? t('rec.rating_plus_one') : t('rec.rating_minus_one');
+                    card.querySelector('.logged').textContent = `${t('rec.recorded')} (${ratingMsg})`;
+                    card.querySelectorAll('.rec-act, .rec-act-reject').forEach(x => x.disabled = true);
+                    b.classList.add('selected');
+                } else {
+                    card.querySelector('.logged').textContent = `${t('common.error_prefix')}: ${rd.detail}`;
+                }
+            });
+        });
+        recs.appendChild(card);
+    }
+}
+
+async function ensureContextAndRun(formBody) {
+    const btn = document.getElementById('runBtn');
+    const info = document.getElementById('ctxInfo');
+    btn.disabled = true; btn.textContent = t('rec.btn.fetching');
+    try {
+        // 1. 預設用今天，若有 form 覆寫就用 form。Quick occasion picker in
+        //    the run-row wins over the default — manual ctx editor (formBody
+        //    path) still wins over both, since user explicitly typed values.
+        const today = new Date(); today.setHours(0,0,0,0);
+        const quickOcc = (document.getElementById('quickOccasion') || {}).value || 'casual';
+        const body = formBody || {
+            date: today.toISOString(),
+            occasion: quickOcc,
+        };
+        const wxInfo = await autoFillWeatherIfNeeded(body);
+
+        // 2. upsert 情境
+        btn.textContent = t('rec.btn.creating_ctx');
+        const ctxRes = await fetch('/contexts/', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const ctx = await ctxRes.json();
+        if (!ctxRes.ok) {
+            info.textContent = t('rec.create_ctx_failed') + ': ' + (ctx.detail || t('common.unknown_error'));
+            return;
+        }
+        info.textContent = fmtCtx(ctx, wxInfo);
+
+        // 3. 跑推薦
+        btn.textContent = t('rec.btn.computing');
+        const topK = parseInt(document.getElementById('topK').value || '5');
+        const recBody = { context_id: ctx.id, top_k: topK };
+        if (forceSelected.size > 0) {
+            recBody.must_include_item_ids = [...forceSelected];
+        }
+        await runRecommend(recBody, ctx.id);
+        document.getElementById('ctxDetails').open = false;
+        document.getElementById('forceDetails').open = false;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = t('rec.run_btn');
+    }
+}
+
+// Extracted so both the initial run and the "Try anyway" override path
+// can share the same fetch + error-handling logic.
+async function runRecommend(recBody, ctxId) {
+    const recRes = await fetch('/recommendations/', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(recBody),
+    });
+    const recData = await recRes.json();
+    if (!recRes.ok) {
+        renderRecError(recData.detail, recBody, ctxId);
+        return;
+    }
+    renderRecs(recData, ctxId);
+}
+
+// Backend now returns structured error objects: {error_code, message}.
+// When the error is "force_include_illegal" we surface an inline
+// "Try anyway" button that re-runs with bypass_pinned_legality=true.
+function renderRecError(detail, recBody, ctxId) {
+    const recsEl = document.getElementById('recs');
+    recsEl.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'padding:12px;background:#fff5e6;border:1px solid #f0c060;border-radius:8px;color:#7a4a00;';
+    const isStructured = detail && typeof detail === 'object';
+    const msg = isStructured ? (detail.message || '') : (detail || '');
+    const code = isStructured ? detail.error_code : null;
+    const isEN = window.getLang && window.getLang() === 'en';
+
+    const title = document.createElement('div');
+    title.style.fontWeight = 'bold';
+    title.textContent = t('rec.recommend_failed');
+    wrap.appendChild(title);
+    const body = document.createElement('div');
+    body.style.marginTop = '4px';
+    body.textContent = msg;
+    wrap.appendChild(body);
+
+    if (code === 'force_include_illegal' && !recBody.bypass_pinned_legality) {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.style.marginTop = '8px';
+        btn.textContent = isEN ? 'Try anyway' : '還是要這樣穿';
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            btn.textContent = isEN ? 'Retrying…' : '重試中…';
+            await runRecommend({ ...recBody, bypass_pinned_legality: true }, ctxId);
+        });
+        wrap.appendChild(btn);
+        const note = document.createElement('div');
+        note.style.cssText = 'margin-top:6px;font-size:0.82rem;color:#996800;';
+        note.textContent = isEN
+            ? 'Note: this overrides the layering rule (e.g. 2 outer coats). The result may look unusual.'
+            : '注意:這會跳過分層規則(例如兩件外套疊穿),結果可能看起來不太正常。';
+        wrap.appendChild(note);
+    }
+    recsEl.appendChild(wrap);
+}
+
+// ─── Force-include grid ──────────────────────────────────────
+const forceSelected = new Set();
+let forceItemsCache = null;
+
+async function loadForceItems() {
+    if (forceItemsCache) return forceItemsCache;
+    const r = await fetch('/items/');
+    forceItemsCache = await r.json();
+    return forceItemsCache;
+}
+
+async function renderForceGrid() {
+    const cat = document.getElementById('forceCatFilter').value;
+    const all = await loadForceItems();
+    const filtered = cat ? all.filter(i => i.category === cat) : all;
+    const grid = document.getElementById('forceGrid');
+    grid.innerHTML = '';
+    for (const it of filtered) {
+        const cell = document.createElement('div');
+        cell.className = 'force-cell' + (forceSelected.has(it.id) ? ' selected' : '');
+        cell.dataset.id = it.id;
+        const img = it.image_path
+            ? `<img src="${it.image_path}" alt="${it.name}" />`
+            : '<div class="noimg-mini"></div>';
+        cell.innerHTML = `${img}<div class="force-name">${it.name}</div>`;
+        cell.addEventListener('click', () => {
+            if (forceSelected.has(it.id)) forceSelected.delete(it.id);
+            else forceSelected.add(it.id);
+            cell.classList.toggle('selected');
+            updateForceCount();
+        });
+        grid.appendChild(cell);
+    }
+    updateForceCount();
+}
+
+function updateForceCount() {
+    const el = document.getElementById('forceCount');
+    el.textContent = forceSelected.size > 0 ? t('rec.modal.items_count', { n: forceSelected.size }) : '';
+}
+
+document.getElementById('forceCatFilter').addEventListener('change', renderForceGrid);
+document.getElementById('forceClear').addEventListener('click', () => {
+    forceSelected.clear();
+    renderForceGrid();
+});
+renderForceGrid();
+
+document.getElementById('runBtn').addEventListener('click', () => ensureContextAndRun(null));
+
+document.getElementById('regenerateBtn').addEventListener('click', () => {
+    document.getElementById('regenerate').style.display = 'none';
+    ensureContextAndRun(null);
+});
+
+document.getElementById('ctxForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = {
+        date: new Date(fd.get('date')).toISOString(),
+        occasion: fd.get('occasion') || 'casual',
+    };
+    // Inputs are in user's display unit; convert to Celsius before POST
+    // because the DB always stores °C.
+    const temp = fd.get('temperature'); if (temp) body.temperature = window.cm.toCelsius(parseFloat(temp));
+    const th = fd.get('temperature_high'); if (th) body.temperature_high = window.cm.toCelsius(parseFloat(th));
+    const tl = fd.get('temperature_low'); if (tl) body.temperature_low = window.cm.toCelsius(parseFloat(tl));
+    const w = fd.get('weather'); if (w) body.weather = w;
+    const n = fd.get('notes'); if (n) body.notes = n;
+    await ensureContextAndRun(body);
+});
+
+// ─── Dynamic temperature unit label ────────────────────────────────────
+// Replace the "(°C)" suffix in the temperature input label with the user's
+// chosen unit, and re-apply on temp-unit-change events.
+function refreshTempUnitLabels() {
+    const u = window.cm.tempUnitSymbol();  // "°C" or "°F"
+    const el = document.querySelector('label [data-i18n="form.temperature"]');
+    if (el) {
+        // i18n string is "氣溫 (°C)" / "Temperature (°C)" — strip and re-append
+        const baseLabel = el.textContent.replace(/\s*\(°[CF]\)\s*$/, '');
+        el.textContent = `${baseLabel} (${u})`;
+    }
+}
+window.addEventListener('cm-temp-unit-change', refreshTempUnitLabels);
+// Apply once after i18n has run (slight delay since data-i18n is async-ish)
+setTimeout(refreshTempUnitLabels, 0);
+window.addEventListener('load', refreshTempUnitLabels);
+
+// ─── Modify modal ─────────────────────────────────────────────
+let modifyState = null; // { ctxId, originalOutfitId, items: [...], cardEl, replacingId }
+let allItemsCache = null;
+
+async function loadAllItems() {
+    if (allItemsCache) return allItemsCache;
+    const r = await fetch('/items/');
+    allItemsCache = await r.json();
+    return allItemsCache;
+}
+
+function renderModifyItems() {
+    const list = document.getElementById('modifyItems');
+    list.innerHTML = '';
+    for (const it of modifyState.items) {
+        const row = document.createElement('div');
+        row.className = 'modify-row';
+        const img = it.image_path
+            ? `<img src="${it.image_path}" alt="${it.name}" />`
+            : '<div class="noimg-mini"></div>';
+        row.innerHTML = `
+            ${img}
+            <div class="modify-info">
+                <div><b>${it.name}</b></div>
+                <div class="cat">${it.category} · ${it.layer_role || 'none'} · ${it.thickness}</div>
+            </div>
+            <button class="modify-swap" data-id="${it.id}" data-cat="${it.category}">${t('rec.modal.swap')}</button>
+            <button class="modify-remove" data-id="${it.id}">${t('rec.modal.remove')}</button>
+        `;
+        row.querySelector('.modify-swap').addEventListener('click', () => {
+            openItemPicker(it.id, it.category);
+        });
+        row.querySelector('.modify-remove').addEventListener('click', () => {
+            modifyState.items = modifyState.items.filter(x => x.id !== it.id);
+            renderModifyItems();
+            updateModifyMeta();
+        });
+        list.appendChild(row);
+    }
+    if (!modifyState.items.length) {
+        list.innerHTML = `<p style="color:#888;text-align:center;padding:14px;">${t('rec.modal.empty')}</p>`;
+    }
+}
+
+function updateModifyMeta() {
+    const meta = document.getElementById('modifyMeta');
+    const counts = { top: 0, bottom: 0, shoes: 0, accessory: 0 };
+    for (const it of modifyState.items) counts[it.category] = (counts[it.category] || 0) + 1;
+    const warnings = [];
+    if (counts.bottom < 1) warnings.push(t('rec.warn_need_bottom'));
+    if (counts.top > 4) warnings.push(t('rec.warn_too_many_top'));
+    meta.innerHTML = t('rec.outfit_composition', counts)
+        + (warnings.length ? `<div style="color:#c33;margin-top:4px;">${warnings.join('<br/>')}</div>` : '');
+    document.getElementById('confirmModify').disabled = warnings.length > 0;
+}
+
+async function openItemPicker(replacingId, category) {
+    modifyState.replacingId = replacingId;
+    document.getElementById('pickerCatFilter').value = category;
+    document.getElementById('pickerTitle').textContent = replacingId ? t('rec.modal.picker_title_swap') : t('rec.modal.picker_title_add');
+    document.getElementById('itemPicker').style.display = 'block';
+    await renderPickerGrid();
+}
+
+async function renderPickerGrid() {
+    const cat = document.getElementById('pickerCatFilter').value;
+    const allItems = await loadAllItems();
+    const grid = document.getElementById('pickerGrid');
+    grid.innerHTML = '';
+    const used = new Set(modifyState.items.map(i => i.id));
+    if (modifyState.replacingId) used.delete(modifyState.replacingId);  // can re-pick to keep it
+    const candidates = allItems.filter(i => i.category === cat && !used.has(i.id));
+    if (!candidates.length) {
+        grid.innerHTML = `<p style="color:#888;text-align:center;padding:14px;">${t('rec.no_items_in_category')}</p>`;
+        return;
+    }
+    for (const it of candidates) {
+        const cell = document.createElement('div');
+        cell.className = 'picker-cell';
+        const img = it.image_path
+            ? `<img src="${it.image_path}" alt="${it.name}" />`
+            : '<div class="noimg-mini"></div>';
+        cell.innerHTML = `${img}<div class="picker-name">${it.name}</div>`;
+        cell.addEventListener('click', () => {
+            if (modifyState.replacingId) {
+                const idx = modifyState.items.findIndex(x => x.id === modifyState.replacingId);
+                if (idx >= 0) modifyState.items[idx] = it;
+                else modifyState.items.push(it);
+            } else {
+                modifyState.items.push(it);
+            }
+            modifyState.replacingId = null;
+            document.getElementById('itemPicker').style.display = 'none';
+            renderModifyItems();
+            updateModifyMeta();
+        });
+        grid.appendChild(cell);
+    }
+}
+
+document.getElementById('pickerCatFilter').addEventListener('change', renderPickerGrid);
+document.getElementById('closePicker').addEventListener('click', () => {
+    modifyState.replacingId = null;
+    document.getElementById('itemPicker').style.display = 'none';
+});
+document.getElementById('addItemBtn').addEventListener('click', () => {
+    openItemPicker(null, 'top');
+});
+
+function closeModifyModal() {
+    document.getElementById('modifyModal').style.display = 'none';
+    document.getElementById('itemPicker').style.display = 'none';
+    modifyState = null;
+}
+document.getElementById('cancelModify').addEventListener('click', closeModifyModal);
+document.getElementById('cancelModify2').addEventListener('click', closeModifyModal);
+
+document.getElementById('confirmModify').addEventListener('click', async () => {
+    if (!modifyState) return;
+    const btn = document.getElementById('confirmModify');
+    btn.disabled = true; btn.textContent = t('rec.submitting');
+    try {
+        const r1 = await fetch('/outfits/manual', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                context_id: modifyState.ctxId,
+                item_ids: modifyState.items.map(i => i.id),
+            }),
+        });
+        const newOutfit = await r1.json();
+        if (!r1.ok) { alert(t('rec.create_failed') + ': ' + (newOutfit.detail || '')); return; }
+        const r2 = await fetch('/recommendations/log', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                context_id: modifyState.ctxId,
+                recommended_outfit_id: modifyState.originalOutfitId,
+                final_worn_outfit_id: newOutfit.id,
+                user_action: 'modified',
+            }),
+        });
+        const log = await r2.json();
+        if (modifyState.cardEl) {
+            const cardEl = modifyState.cardEl;
+            cardEl.querySelector('.logged').textContent =
+                r2.ok ? `已記錄修改 (評分 +2, 新 outfit #${newOutfit.id})` : `錯誤: ${log.detail}`;
+            cardEl.querySelectorAll('.rec-act').forEach(x => x.disabled = true);
+            const modBtn = cardEl.querySelector('.rec-act.mod');
+            if (modBtn) modBtn.classList.add('selected');
+        }
+        closeModifyModal();
+    } finally {
+        btn.disabled = false; btn.textContent = t('rec.modal.confirm');
+    }
+});
+
+function openModify(ctxId, originalOutfit, cardEl) {
+    modifyState = {
+        ctxId,
+        originalOutfitId: originalOutfit.id,
+        items: originalOutfit.outfit_items.map(oi => oi.item).filter(Boolean),
+        cardEl,
+        replacingId: null,
+    };
+    renderModifyItems();
+    updateModifyMeta();
+    document.getElementById('modifyModal').style.display = 'flex';
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const itemPicker = document.getElementById('itemPicker');
+        if (itemPicker.style.display === 'block') {
+            itemPicker.style.display = 'none';
+            return;
+        }
+        if (document.getElementById('modifyModal').style.display === 'flex') closeModifyModal();
+    }
+});
+
+// default form date = today
+document.querySelector('input[name="date"]').valueAsDate = new Date();
+
+// Soft-block: show banner if user hasn't finished training
+(async () => {
+    try {
+        const r = await fetch('/stats/home');
+        if (!r.ok) return;
+        const s = await r.json();
+        if (!s.training_complete) {
+            document.getElementById('trainingGate').style.display = 'flex';
+        }
+    } catch {}
+})();
+</script>
+{% endblock %}

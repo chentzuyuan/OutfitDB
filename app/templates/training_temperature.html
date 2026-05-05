@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}ClosetMind · Temperature Training{% endblock %}
+{% block content %}
+<h1 data-i18n="train2.temp.title">溫度訓練</h1>
+
+<section class="panel" id="introPanel">
+    <p data-i18n="train2.temp.intro">為每件穿搭勾選「我會在哪些溫度區間穿這套」。可以多選，也可以全部不勾（不適合任何溫度）。我們會自動補測你回答稀疏的區間。</p>
+    <div id="zoneStats" class="zone-stats"></div>
+    <div class="train-progress">
+        <div class="train-progress-bar"><div id="progressFill"></div></div>
+        <div class="train-progress-text" id="progressText">0 ratings</div>
+    </div>
+    <button class="btn run-big" id="startBtn" data-i18n="train2.temp.start">開始下一批</button>
+    <a href="/training/aesthetic" id="goAesthetic" class="btn secondary" style="display:none;margin-left:8px;" data-i18n="train2.temp.goto_aesthetic">前往美感訓練</a>
+</section>
+
+<section class="panel" id="batchPanel" style="display:none;">
+    <div class="batch-head">
+        <span class="batch-label" data-i18n="train2.temp.target_zone">目標溫度區間</span>
+        <span class="batch-num" id="targetZone"></span>
+    </div>
+    <div id="outfits" class="train-batch-grid"></div>
+    <div class="batch-foot">
+        <span id="filledInfo"></span>
+        <button class="btn run-big" id="submitBtn" disabled data-i18n="train2.temp.submit">送出這批</button>
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+const ZONES = [
+    {key: 'subzero', range: '<0°C',    label_zh: '冰寒',  label_en: 'Subzero'},
+    {key: 'cold',    range: '0–10°C',  label_zh: '冷',    label_en: 'Cold'},
+    {key: 'cool',    range: '10–18°C', label_zh: '涼',    label_en: 'Cool'},
+    {key: 'mild',    range: '18–25°C', label_zh: '溫',    label_en: 'Mild'},
+    {key: 'warm',    range: '25–30°C', label_zh: '暖',    label_en: 'Warm'},
+    {key: 'hot',     range: '>30°C',   label_zh: '熱',    label_en: 'Hot'},
+];
+
+function zoneLabel(z) {
+    const isEN = window.getLang && window.getLang() === 'en';
+    return `${isEN ? z.label_en : z.label_zh} (${z.range})`;
+}
+
+let currentBatch = null;
+const answers = new Map();  // outfit_id -> Set of zone keys
+
+async function refreshProgress() {
+    const r = await fetch('/training/v2/temp/progress').then(x => x.json());
+    const fill = document.getElementById('progressFill');
+    const text = document.getElementById('progressText');
+    const stats = document.getElementById('zoneStats');
+    const goLink = document.getElementById('goAesthetic');
+    const startBtn = document.getElementById('startBtn');
+
+    const target = r.zones.length * r.min_per_zone;
+    const pct = Math.min(100, Math.round(100 * r.total_ratings / target));
+    fill.style.width = pct + '%';
+    const isEN = window.getLang && window.getLang() === 'en';
+    text.textContent = isEN
+        ? `${r.total_ratings} ratings — ${r.zones.filter(z => z.covered).length}/${r.zones.length} zones covered`
+        : `${r.total_ratings} 筆評分 · ${r.zones.filter(z => z.covered).length}/${r.zones.length} 區間已覆蓋`;
+
+    stats.innerHTML = r.zones.map(z => {
+        const okPct = z.total > 0 ? Math.round(z.acceptance_rate * 100) : 0;
+        const covered = z.covered ? '✓' : '';
+        return `<div class="zone-stat ${z.covered ? 'done' : ''}">
+            <div class="zone-name">${zoneLabel(ZONES.find(zz => zz.key === z.key))}</div>
+            <div class="zone-counts">${z.total}/${r.min_per_zone} ${covered}</div>
+            <div class="zone-rate">acceptance ${okPct}%</div>
+        </div>`;
+    }).join('');
+
+    // Always allow more training — extra data only helps. After all zones
+    // are covered, surface the next-stage shortcut alongside (not instead of)
+    // the start button.
+    startBtn.style.display = '';
+    goLink.style.display = (r.completed || r.all_zones_covered) ? '' : 'none';
+}
+
+async function startBatch() {
+    const startBtn = document.getElementById('startBtn');
+    startBtn.disabled = true;
+    startBtn.textContent = window.t ? window.t('train2.temp.loading') : '生成中…';
+    try {
+        const r = await fetch('/training/v2/temp/next').then(x => x.json());
+        if (r.done) {
+            await refreshProgress();
+            return;
+        }
+        currentBatch = r;
+        answers.clear();
+        document.getElementById('targetZone').textContent = `${r.target_zone} (${r.target_zone_range})`;
+        renderBatch();
+        document.getElementById('introPanel').style.display = 'none';
+        document.getElementById('batchPanel').style.display = '';
+        window.scrollTo({top: 0, behavior: 'smooth'});
+    } finally {
+        startBtn.disabled = false;
+        startBtn.textContent = window.t ? window.t('train2.temp.start') : '開始下一批';
+    }
+}
+
+function renderBatch() {
+    const grid = document.getElementById('outfits');
+    grid.innerHTML = '';
+    for (const o of currentBatch.outfits) {
+        const itemsHtml = o.items.map(oi => {
+            const it = oi.item;
+            const img = it && it.image_path ? `<img src="${it.image_path}" alt="${it.name}" />` : `<div class="noimg-mini"></div>`;
+            return `<div class="mini">${img}<div class="mini-name">${it ? it.name : '#' + oi.item_id}</div></div>`;
+        }).join('');
+        const zoneBtns = ZONES.map(z =>
+            `<button type="button" class="zone-btn" data-zone="${z.key}">${zoneLabel(z)}</button>`
+        ).join('');
+        const card = document.createElement('div');
+        card.className = 'train-outfit-card';
+        card.dataset.outfitId = o.outfit_id;
+        card.innerHTML = `
+            <div class="train-outfit-items">${itemsHtml}</div>
+            <div class="train-outfit-zones">
+                <div class="rate-label">${t('train2.temp.q_zones')}</div>
+                <div class="zone-row">${zoneBtns}</div>
+            </div>
+        `;
+        const oid = o.outfit_id;
+        answers.set(oid, new Set());
+        card.querySelectorAll('button[data-zone]').forEach(b => {
+            b.addEventListener('click', () => {
+                const set = answers.get(oid);
+                const z = b.dataset.zone;
+                if (set.has(z)) { set.delete(z); b.classList.remove('selected'); }
+                else            { set.add(z); b.classList.add('selected'); }
+                updateSubmit();
+            });
+        });
+        grid.appendChild(card);
+    }
+    updateSubmit();
+}
+
+function updateSubmit() {
+    // every outfit must be answered (selected something OR explicitly skipped via "none")
+    // For now, allow submit any time — empty set means "not for any zone" which is valid signal
+    const submitBtn = document.getElementById('submitBtn');
+    const total = currentBatch.outfits.length;
+    document.getElementById('filledInfo').textContent =
+        `${answers.size} / ${total}`;
+    submitBtn.disabled = answers.size < total;
+}
+
+async function submitBatch() {
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = window.t ? window.t('train2.temp.submitting') : '送出中…';
+    try {
+        const ratings = currentBatch.outfits.map(o => ({
+            outfit_id: o.outfit_id,
+            zones_ok: [...(answers.get(o.outfit_id) || [])],
+        }));
+        const r = await fetch('/training/v2/temp/submit', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ratings}),
+        });
+        if (r.ok) {
+            currentBatch = null;
+            answers.clear();
+            document.getElementById('batchPanel').style.display = 'none';
+            document.getElementById('introPanel').style.display = '';
+            await refreshProgress();
+        }
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = window.t ? window.t('train2.temp.submit') : '送出這批';
+    }
+}
+
+document.getElementById('startBtn').addEventListener('click', startBatch);
+document.getElementById('submitBtn').addEventListener('click', submitBatch);
+refreshProgress();
+window.onLanguageChange = () => {
+    refreshProgress();
+    if (currentBatch) renderBatch();  // also re-render batch buttons in new language
+};
+</script>
+{% endblock %}

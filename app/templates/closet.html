@@ -1,0 +1,626 @@
+{% extends "base.html" %}
+{% block title %}ClosetMind · 衣櫥{% endblock %}
+{% block content %}
+<h1 data-i18n="closet.title">衣櫥</h1>
+
+<div class="toolbar">
+    <select id="categoryFilter">
+        <option value="" data-i18n="closet.all_categories">全部類別</option>
+        <option value="top">top</option>
+        <option value="bottom">bottom</option>
+        <option value="shoes">shoes</option>
+        <option value="accessory">accessory</option>
+        <option value="fullbody">fullbody</option>
+    </select>
+    <select id="colorFilter">
+        <option value="" data-i18n="closet.all_colors">全部顏色</option>
+    </select>
+    <select id="materialFilter">
+        <option value="" data-i18n="closet.all_materials">全部材質</option>
+    </select>
+    <select id="stateFilter">
+        <option value="" data-i18n="closet.all_states">全部狀態</option>
+        <option value="clean" data-i18n="closet.state_clean">clean</option>
+        <option value="worn" data-i18n="closet.state_worn">worn (穿過, 還能再穿)</option>
+        <option value="in_laundry" data-i18n="closet.state_dirty">in_laundry (待洗)</option>
+        <option value="unavailable" data-i18n="closet.state_unavailable">unavailable</option>
+    </select>
+    <button class="btn" id="refreshBtn" data-i18n="closet.refresh">重新整理</button>
+    <button class="btn secondary" id="laundryBtn" data-i18n="closet.select_mode">多選</button>
+</div>
+
+<div id="grid" class="grid-cards"></div>
+
+<!-- Floating action bar shown only in Laundry mode -->
+<div id="laundryBar" class="laundry-bar" style="display:none;">
+    <span id="laundryCount" class="laundry-count">0 件已選</span>
+    <button class="btn secondary" id="laundrySelectAll" data-i18n="closet.select_all">全選</button>
+    <button class="btn secondary" id="laundryCancel" data-i18n="closet.cancel">取消</button>
+    <button class="btn secondary" id="laundryMarkUnavailable" data-i18n="closet.mark_unavailable_bulk">標為不可穿</button>
+    <button class="btn secondary" id="laundryMarkAvailable" data-i18n="closet.mark_available_bulk">取回</button>
+    <button class="btn warn" id="laundryMarkDirty" data-i18n="closet.mark_dirty_bulk">標為髒(待洗)</button>
+    <button class="btn" id="laundrySubmit" data-i18n="closet.send_to_laundry">送洗(重置乾淨度)</button>
+</div>
+
+<!-- Right-click context menu -->
+<div id="ctxMenu" class="ctx-menu" style="display:none;">
+    <button data-action="mark_dirty" data-i18n="closet.menu_mark_dirty">標記為髒</button>
+    <button data-action="mark_clean" data-i18n="closet.menu_mark_clean">標記為乾淨</button>
+    <button data-action="edit_wpw" data-i18n="closet.menu_edit_wpw">編輯穿幾次要洗…</button>
+    <button data-action="edit_composition" data-i18n="closet.menu_edit_composition">編輯材質 / 混紡比例…</button>
+    <button data-action="update_image" data-i18n="closet.menu_update_image">更新圖片…</button>
+    <hr/>
+    <button data-action="delete" data-i18n="closet.menu_delete">刪除</button>
+</div>
+<!-- Hidden file input the right-click menu drives. Lives outside the
+     menu so it survives the menu being hidden between click → file pick. -->
+<input type="file" id="updateImageFile" accept="image/*" style="display:none;" />
+{% endblock %}
+{% block scripts %}
+<script>
+const ctxMenu  = document.getElementById('ctxMenu');
+const grid     = document.getElementById('grid');
+const lBar     = document.getElementById('laundryBar');
+let ctxTarget  = null;
+let allItems   = [];          // last loaded list (for client-side filter on color/material)
+let laundryMode = false;
+const selected = new Set();
+
+// ─── State badge helpers ────────────────────────────────────────────────
+function cleanlinessBadge(it) {
+    const wpw = it.wears_per_wash ?? 3;
+    const n   = it.wear_count_since_wash ?? 0;
+    const isEN = window.getLang && window.getLang() === 'en';
+    if (it.state === 'unavailable') {
+        return {label: isEN ? 'UNAVAILABLE' : '不可用', cls: 'badge-unavail', tip: ''};
+    }
+    if (it.state === 'in_laundry' || n >= wpw) {
+        return {label: isEN ? `DIRTY ${n}/${wpw}` : `待洗 ${n}/${wpw}`, cls: 'badge-dirty', tip: 'Laundry 重置'};
+    }
+    if (n > 0) {
+        return {label: `${n}/${wpw}`, cls: 'badge-worn', tip: 'used'};
+    }
+    return {label: `0/${wpw}`, cls: 'badge-clean', tip: 'clean'};
+}
+
+// ─── Build dropdown options dynamically from item data ─────────────────
+function populateDropdowns(items) {
+    const colorSet = new Set(), matSet = new Set();
+    for (const it of items) {
+        for (const c of (it.colors || [])) colorSet.add(c.toLowerCase());
+        if (it.material) matSet.add(it.material.toLowerCase());
+    }
+    const colorSel = document.getElementById('colorFilter');
+    const matSel   = document.getElementById('materialFilter');
+    const prevColor = colorSel.value, prevMat = matSel.value;
+    // applyTranslations() only runs on initial page load, not on dynamic
+    // option re-builds — so resolve the localized "All ___" label here
+    // with hard-coded fallback in case i18n cache is stale.
+    function tFb(key, zh, en) {
+        const isEN = window.getLang && window.getLang() === 'en';
+        const v = window.t ? window.t(key) : null;
+        if (v && v !== key) return v;
+        return isEN ? en : zh;
+    }
+    const allColorsLabel = tFb('closet.all_colors',    '全部顏色', 'All colors');
+    const allMatsLabel   = tFb('closet.all_materials', '全部材質', 'All materials');
+    colorSel.innerHTML = `<option value="">${allColorsLabel}</option>`;
+    matSel.innerHTML   = `<option value="">${allMatsLabel}</option>`;
+    [...colorSet].sort().forEach(c => {
+        const o = document.createElement('option');
+        o.value = c; o.textContent = c;
+        colorSel.appendChild(o);
+    });
+    [...matSet].sort().forEach(m => {
+        const o = document.createElement('option');
+        o.value = m; o.textContent = m;
+        matSel.appendChild(o);
+    });
+    colorSel.value = prevColor;
+    matSel.value   = prevMat;
+}
+
+// ─── Load + render ─────────────────────────────────────────────────────
+async function loadItems() {
+    const params = new URLSearchParams();
+    const cat   = document.getElementById('categoryFilter').value;
+    const color = document.getElementById('colorFilter').value;
+    const mat   = document.getElementById('materialFilter').value;
+    const st    = document.getElementById('stateFilter').value;
+    if (cat)   params.set('category', cat);
+    if (color) params.set('color', color);
+    if (mat)   params.set('material', mat);
+    if (st)    params.set('state', st);
+    const url = '/items/' + (params.toString() ? '?' + params : '');
+    const res = await fetch(url);
+    allItems = await res.json();
+    populateDropdowns(allItems);
+    renderGrid();
+    // Filter changes shift which items are "visible" → the Select-all button
+    // label depends on whether everything visible is selected, so refresh it.
+    if (laundryMode) updateLaundryBar();
+}
+
+function formatComposition(it) {
+    // Render the fabric blend as "cotton 40% · linen 60%", or just the
+    // primary material when composition is unset (legacy items / 100%).
+    if (Array.isArray(it.composition) && it.composition.length > 0) {
+        return it.composition
+            .map(c => `${c.material} ${c.pct}%`)
+            .join(' · ');
+    }
+    return it.material || '—';
+}
+
+function renderGrid() {
+    grid.innerHTML = '';
+    for (const it of allItems) {
+        const card = document.createElement('div');
+        card.className = 'card' + (selected.has(it.id) ? ' card-selected' : '');
+        card.dataset.itemId = it.id;
+        const img = it.image_path
+            ? `<img src="${it.image_path}" alt="${it.name}" />`
+            : `<div class="noimg">${t('closet.no_image')}</div>`;
+        const b = cleanlinessBadge(it);
+        const checkbox = laundryMode
+            ? `<div class="laundry-check ${selected.has(it.id) ? 'checked' : ''}"></div>`
+            : '';
+        card.innerHTML = `
+            ${checkbox}
+            <div class="img-wrap">
+                ${img}
+                <span class="cleanliness-badge ${b.cls}" title="${b.tip}">${b.label}</span>
+            </div>
+            <div class="meta">
+                <div class="name">${it.name}</div>
+                <div class="tags">${it.category} · ${it.layer_role} · ${it.thickness}</div>
+                <div class="tags">${(it.colors || []).join(', ')}</div>
+                <div class="tags composition">${formatComposition(it)}</div>
+                <div class="tags">state: ${it.state ?? '—'}</div>
+            </div>
+        `;
+        const target = { id: it.id, name: it.name, item: it };
+
+        // In laundry mode, click toggles selection. Otherwise right-click opens menu.
+        if (laundryMode) {
+            card.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleSelect(it.id);
+            });
+        } else {
+            card.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                showMenu(e.clientX, e.clientY, target);
+            });
+            attachLongPress(card, target);
+        }
+        grid.appendChild(card);
+    }
+}
+
+// ─── Laundry mode ──────────────────────────────────────────────────────
+function toggleSelect(id) {
+    if (selected.has(id)) selected.delete(id); else selected.add(id);
+    updateLaundryBar();
+    renderGrid();  // re-render to update card highlight
+}
+
+function updateLaundryBar() {
+    const isEN = window.getLang && window.getLang() === 'en';
+    document.getElementById('laundryCount').textContent =
+        isEN ? `${selected.size} selected` : `已選 ${selected.size} 件`;
+    document.getElementById('laundrySubmit').disabled = selected.size === 0;
+    const dirtyBtn = document.getElementById('laundryMarkDirty');
+    if (dirtyBtn) {
+        dirtyBtn.disabled = selected.size === 0;
+        // Defensive: if cached i18n.js is stale and missing the new key,
+        // window.t() returns the key itself. Override with hard-coded
+        // localized fallback so the button never shows "closet.mark_dirty_bulk"
+        // raw to the user.
+        const v = window.t ? window.t('closet.mark_dirty_bulk') : null;
+        dirtyBtn.textContent = (v && v !== 'closet.mark_dirty_bulk')
+            ? v
+            : (isEN ? 'Mark dirty (queue)' : '標為髒(待洗)');
+    }
+    const submitBtn = document.getElementById('laundrySubmit');
+    if (submitBtn) {
+        const v = window.t ? window.t('closet.send_to_laundry') : null;
+        submitBtn.textContent = (v && v !== 'closet.send_to_laundry')
+            ? v
+            : (isEN ? 'Send to laundry (reset)' : '送洗(重置乾淨度)');
+    }
+    const cancelBtn = document.getElementById('laundryCancel');
+    if (cancelBtn) {
+        const v = window.t ? window.t('closet.cancel') : null;
+        cancelBtn.textContent = (v && v !== 'closet.cancel')
+            ? v
+            : (isEN ? 'Cancel' : '取消');
+    }
+    // Mark unavailable / Mark available buttons (state = unavailable / clean)
+    const unavBtn = document.getElementById('laundryMarkUnavailable');
+    if (unavBtn) {
+        unavBtn.disabled = selected.size === 0;
+        const v = window.t ? window.t('closet.mark_unavailable_bulk') : null;
+        unavBtn.textContent = (v && v !== 'closet.mark_unavailable_bulk')
+            ? v
+            : (isEN ? 'Mark unavailable' : '標為不可穿');
+    }
+    const availBtn = document.getElementById('laundryMarkAvailable');
+    if (availBtn) {
+        availBtn.disabled = selected.size === 0;
+        const v = window.t ? window.t('closet.mark_available_bulk') : null;
+        availBtn.textContent = (v && v !== 'closet.mark_available_bulk')
+            ? v
+            : (isEN ? 'Mark available' : '取回');
+    }
+    // "Select all" button flips to "Deselect all" when every visible item
+    // is already selected — same button, different action, less clutter.
+    //
+    // i18n quirk: when the user's cached i18n.js is older than the keys we
+    // need, window.t(key) returns the key itself rather than throwing.
+    // Detect that and fall back to a hard-coded localized string so the
+    // button doesn't show "closet.select_all" raw to the user.
+    function tWithFallback(key, fallbackZh, fallbackEn) {
+        const v = window.t ? window.t(key) : null;
+        if (v && v !== key) return v;
+        return isEN ? fallbackEn : fallbackZh;
+    }
+    const selBtn = document.getElementById('laundrySelectAll');
+    if (selBtn) {
+        const allSelected = allItems.length > 0 &&
+            allItems.every(it => selected.has(it.id));
+        selBtn.textContent = allSelected
+            ? tWithFallback('closet.deselect_all', '取消全選', 'Deselect all')
+            : tWithFallback('closet.select_all',   '全選',     'Select all');
+        selBtn.disabled = allItems.length === 0;
+    }
+}
+
+document.getElementById('laundryBtn').addEventListener('click', () => {
+    laundryMode = !laundryMode;
+    selected.clear();
+    lBar.style.display = laundryMode ? '' : 'none';
+    document.getElementById('laundryBtn').classList.toggle('active', laundryMode);
+    updateLaundryBar();
+    renderGrid();
+});
+
+document.getElementById('laundryCancel').addEventListener('click', () => {
+    laundryMode = false;
+    selected.clear();
+    lBar.style.display = 'none';
+    document.getElementById('laundryBtn').classList.remove('active');
+    renderGrid();
+});
+
+// Select-all toggles based on current state of `allItems` (= what the
+// active filters are showing). So if you've filtered to "tops" the
+// button selects all visible tops; switch filter to "bottoms" then
+// click again, the bottoms get added to the existing selection.
+document.getElementById('laundrySelectAll').addEventListener('click', () => {
+    if (allItems.length === 0) return;
+    const allSelected = allItems.every(it => selected.has(it.id));
+    if (allSelected) {
+        // Only remove the currently visible items from the selection,
+        // not items hidden by filters (which the user already selected
+        // in a previous filter pass).
+        for (const it of allItems) selected.delete(it.id);
+    } else {
+        for (const it of allItems) selected.add(it.id);
+    }
+    updateLaundryBar();
+    renderGrid();
+});
+
+document.getElementById('laundrySubmit').addEventListener('click', async () => {
+    if (selected.size === 0) return;
+    const r = await fetch('/items/laundry', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({item_ids: [...selected]}),
+    });
+    if (r.ok) {
+        selected.clear();
+        laundryMode = false;
+        lBar.style.display = 'none';
+        document.getElementById('laundryBtn').classList.remove('active');
+        await loadItems();
+    } else {
+        alert(t('common.error_prefix') + ': ' + (await r.text()));
+    }
+});
+
+// "Mark dirty" — flips state to in_laundry without resetting wear count.
+// Use case: clothes are too dirty to wear today, but the user hasn't
+// done laundry yet; they want the recommender to skip these items
+// until laundry day.
+document.getElementById('laundryMarkDirty').addEventListener('click', async () => {
+    if (selected.size === 0) return;
+    const isEN = window.getLang && window.getLang() === 'en';
+    function tFb(key, fbZh, fbEn) {
+        const v = window.t ? window.t(key) : null;
+        if (v && v !== key) return v;
+        return isEN ? fbEn : fbZh;
+    }
+    const confirmMsg = tFb(
+        'closet.mark_dirty_confirm',
+        `要把 ${selected.size} 件標為髒嗎？(可穿狀態 → 待洗,但不會重置乾淨度數字)`,
+        `Mark ${selected.size} items as dirty? (becomes unwearable until laundry day, wear-count is not reset)`
+    );
+    if (!confirm(confirmMsg)) return;
+    const r = await fetch('/items/dirty', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({item_ids: [...selected]}),
+    });
+    if (r.ok) {
+        selected.clear();
+        laundryMode = false;
+        lBar.style.display = 'none';
+        document.getElementById('laundryBtn').classList.remove('active');
+        await loadItems();
+    } else {
+        alert(t('common.error_prefix') + ': ' + (await r.text()));
+    }
+});
+
+// "Mark unavailable" — flips state to `unavailable` without touching
+// wear-count. Use case: sent for repair, seasonal storage, lent out.
+// Item disappears from recommendations until manually brought back.
+async function bulkSetState(endpoint, confirmKey, fbZh, fbEn) {
+    if (selected.size === 0) return;
+    const isEN = window.getLang && window.getLang() === 'en';
+    function tFb(key, zh, en) {
+        const v = window.t ? window.t(key) : null;
+        if (v && v !== key) return v;
+        return isEN ? en : zh;
+    }
+    const n = selected.size;
+    const confirmMsg = tFb(confirmKey, fbZh.replace('{n}', n), fbEn.replace('{n}', n));
+    if (!confirm(confirmMsg)) return;
+    const r = await fetch(endpoint, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({item_ids: [...selected]}),
+    });
+    if (r.ok) {
+        selected.clear();
+        laundryMode = false;
+        lBar.style.display = 'none';
+        document.getElementById('laundryBtn').classList.remove('active');
+        await loadItems();
+    } else {
+        alert(t('common.error_prefix') + ': ' + (await r.text()));
+    }
+}
+
+document.getElementById('laundryMarkUnavailable').addEventListener('click', () => {
+    bulkSetState(
+        '/items/unavailable',
+        'closet.mark_unavailable_confirm',
+        '把選的 {n} 件標為不可穿?(系統不會推薦,直到你手動取回)',
+        'Mark {n} items as unavailable? (system will skip them until you bring them back)'
+    );
+});
+
+document.getElementById('laundryMarkAvailable').addEventListener('click', () => {
+    bulkSetState(
+        '/items/available',
+        'closet.mark_available_confirm',
+        '把選的 {n} 件設回可穿(乾淨)?',
+        'Bring {n} items back to clean?'
+    );
+});
+
+// ─── Context menu helpers ──────────────────────────────────────────────
+function showMenu(x, y, target) {
+    ctxTarget = target;
+    const padding = 8, menuW = 200, menuH = 180;
+    const mx = Math.min(x, window.innerWidth  - menuW - padding);
+    const my = Math.min(y, window.innerHeight - menuH - padding);
+    ctxMenu.style.left = mx + 'px';
+    ctxMenu.style.top  = my + 'px';
+    ctxMenu.style.display = 'block';
+}
+
+function hideMenu() {
+    ctxMenu.style.display = 'none';
+    ctxTarget = null;
+}
+
+ctxMenu.querySelector('[data-action="mark_dirty"]').addEventListener('click', async () => {
+    if (!ctxTarget) return;
+    const { id, item } = ctxTarget;
+    hideMenu();
+    // Set wear_count to wears_per_wash → triggers in_laundry
+    await fetch(`/items/${id}/cleanliness`, {
+        method: 'PATCH', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({wear_count_since_wash: item.wears_per_wash, state: 'in_laundry'}),
+    });
+    await loadItems();
+});
+
+ctxMenu.querySelector('[data-action="mark_clean"]').addEventListener('click', async () => {
+    if (!ctxTarget) return;
+    const { id } = ctxTarget;
+    hideMenu();
+    await fetch(`/items/${id}/cleanliness`, {
+        method: 'PATCH', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({wear_count_since_wash: 0, state: 'clean'}),
+    });
+    await loadItems();
+});
+
+ctxMenu.querySelector('[data-action="edit_wpw"]').addEventListener('click', async () => {
+    if (!ctxTarget) return;
+    const { id, item } = ctxTarget;
+    hideMenu();
+    const isEN = window.getLang && window.getLang() === 'en';
+    const promptMsg = isEN
+        ? `How many wears before "${item.name}" needs laundry?`
+        : `「${item.name}」穿幾次要洗？`;
+    const cur = item.wears_per_wash ?? 3;
+    const v = prompt(promptMsg, String(cur));
+    if (v == null) return;
+    const n = parseInt(v, 10);
+    if (isNaN(n) || n < 1) {
+        alert(isEN ? 'Must be ≥ 1' : '必須 ≥ 1');
+        return;
+    }
+    await fetch(`/items/${id}`, {
+        method: 'PATCH', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({wears_per_wash: n}),
+    });
+    await loadItems();
+});
+
+// ─── Edit composition ────────────────────────────────────────────────
+// Compact prompt-driven editor (no modal needed): user types a string like
+// "cotton 40, linen 60" or just "cotton" (single material). We parse
+// liberally and validate — sum to 100, each entry valid material.
+ctxMenu.querySelector('[data-action="edit_composition"]').addEventListener('click', async () => {
+    if (!ctxTarget) return;
+    const { id, item } = ctxTarget;
+    hideMenu();
+    const isEN = window.getLang && window.getLang() === 'en';
+    // Build an editable string from current composition / material
+    const cur = Array.isArray(item.composition) && item.composition.length > 0
+        ? item.composition.map(c => `${c.material} ${c.pct}`).join(', ')
+        : (item.material || 'cotton');
+    const promptMsg = isEN
+        ? `Material for "${item.name}"\n\nSingle: cotton\nBlend: cotton 40, linen 60  (must sum to 100)`
+        : `「${item.name}」的材質\n\n單一材質: cotton\n混紡: cotton 40, linen 60  (% 加總須 = 100)`;
+    const raw = prompt(promptMsg, cur);
+    if (raw == null) return;
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+
+    // Parse: split by comma, each token "material pct" or just "material"
+    const tokens = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+    let payload;
+    if (tokens.length === 1 && !/\d/.test(tokens[0])) {
+        // Single material, no pct — clear the blend, set material
+        payload = { material: tokens[0].toLowerCase(), composition: [] };
+    } else {
+        const entries = [];
+        for (const tok of tokens) {
+            const m = tok.match(/^([a-zA-Z]+)\s+(\d+)$/);
+            if (!m) {
+                alert(isEN
+                    ? `Cannot parse "${tok}" — expected "material pct" e.g. "cotton 40"`
+                    : `無法解析「${tok}」—— 格式應為「材質 百分比」例如「cotton 40」`);
+                return;
+            }
+            entries.push({ material: m[1].toLowerCase(), pct: parseInt(m[2], 10) });
+        }
+        const sum = entries.reduce((a, e) => a + e.pct, 0);
+        if (sum !== 100) {
+            alert(isEN
+                ? `Percentages sum to ${sum}, must be 100`
+                : `百分比加總為 ${sum},必須等於 100`);
+            return;
+        }
+        payload = { composition: entries };
+    }
+    const r = await fetch(`/items/${id}`, {
+        method: 'PATCH', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        alert((isEN ? 'Update failed: ' : '更新失敗: ') + (err.detail || r.status));
+        return;
+    }
+    await loadItems();
+});
+
+// ─── Update image ────────────────────────────────────────────────────
+// Used after CSV bulk-import (items have no image yet) or to replace
+// a blurry / bad photo. We trigger the hidden <input type="file"> from
+// the menu click and POST the chosen file to /items/{id}/image.
+ctxMenu.querySelector('[data-action="update_image"]').addEventListener('click', () => {
+    if (!ctxTarget) return;
+    const { id } = ctxTarget;
+    hideMenu();
+    const fileInput = document.getElementById('updateImageFile');
+    // Capture the target id at click time so the file-pick handler knows
+    // which item to update — `ctxTarget` may shift if user opens another
+    // menu while the picker is up.
+    fileInput.dataset.targetId = String(id);
+    fileInput.value = '';  // reset so re-picking the same filename re-fires `change`
+    fileInput.click();
+});
+
+document.getElementById('updateImageFile').addEventListener('change', async (ev) => {
+    const fileInput = ev.target;
+    const targetId = fileInput.dataset.targetId;
+    const file = fileInput.files[0];
+    if (!targetId || !file) return;
+    const isEN = window.getLang && window.getLang() === 'en';
+    const fd = new FormData();
+    fd.append('image', file, file.name);
+    const r = await fetch(`/items/${targetId}/image`, { method: 'POST', body: fd });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        alert((isEN ? 'Image update failed: ' : '圖片更新失敗: ') + (err.detail || r.status));
+        return;
+    }
+    await loadItems();
+});
+
+ctxMenu.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+    if (!ctxTarget) return;
+    const { id, name } = ctxTarget;
+    hideMenu();
+    const msg = (window.t ? window.t('closet.delete_confirm', { name }) : `Delete "${name}"?`);
+    if (!confirm(msg)) return;
+    const res = await fetch(`/items/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+        loadItems();
+    } else {
+        const data = await res.json().catch(() => ({}));
+        alert(t('common.delete_failed') + ': ' + (data.detail || res.status));
+    }
+});
+
+document.addEventListener('click', (e) => {
+    if (!ctxMenu.contains(e.target)) hideMenu();
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        hideMenu();
+        if (laundryMode) document.getElementById('laundryCancel').click();
+    }
+});
+window.addEventListener('scroll', hideMenu, { passive: true });
+
+function attachLongPress(card, target) {
+    let timer = null;
+    let moved = false;
+    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    card.addEventListener('touchstart', (e) => {
+        moved = false;
+        const t = e.touches[0];
+        timer = setTimeout(() => {
+            if (!moved) showMenu(t.clientX, t.clientY, target);
+        }, 500);
+    }, { passive: true });
+    card.addEventListener('touchmove', () => { moved = true; cancel(); }, { passive: true });
+    card.addEventListener('touchend', cancel);
+    card.addEventListener('touchcancel', cancel);
+}
+
+// ─── Filters ──────────────────────────────────────────────────────────
+['categoryFilter', 'colorFilter', 'materialFilter', 'stateFilter'].forEach(id => {
+    document.getElementById(id).addEventListener('change', loadItems);
+});
+document.getElementById('refreshBtn').addEventListener('click', loadItems);
+
+loadItems();
+// On language switch: re-localize the filter dropdowns ("All colors" etc.)
+// AND re-render cards. Dropdowns aren't picked up by applyTranslations()
+// because populateDropdowns() rebuilds them dynamically.
+window.onLanguageChange = () => {
+    populateDropdowns(allItems);
+    renderGrid();
+    if (laundryMode) updateLaundryBar();  // refresh Select-all / Mark-dirty button text too
+};
+</script>
+{% endblock %}

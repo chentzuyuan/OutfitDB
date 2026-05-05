@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}ClosetMind · Aesthetic Training{% endblock %}
+{% block content %}
+<h1 data-i18n="train2.aes.title">美感訓練</h1>
+
+<section class="panel" id="introPanel">
+    <p data-i18n="train2.aes.intro">純粹評分這套穿搭好不好看（顏色 / 剪裁 / 層次）。溫度跟場合先不用考慮。</p>
+    <div class="train-progress">
+        <div class="train-progress-bar"><div id="progressFill"></div></div>
+        <div class="train-progress-text" id="progressText"></div>
+    </div>
+    <button class="btn run-big" id="startBtn" data-i18n="train2.aes.start">開始下一批</button>
+    <a href="/training/occasion" id="goOccasion" class="btn secondary" style="display:none;margin-left:8px;" data-i18n="train2.aes.goto_occasion">前往場合訓練</a>
+</section>
+
+<section class="panel" id="batchPanel" style="display:none;">
+    <div id="outfits" class="train-batch-grid"></div>
+    <div class="batch-foot">
+        <span id="filledInfo"></span>
+        <button class="btn run-big" id="submitBtn" disabled data-i18n="train2.aes.submit">送出這批</button>
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+let currentBatch = null;
+const answers = new Map();  // outfit_id -> rating
+
+async function refreshProgress() {
+    const r = await fetch('/training/v2/aesthetic/progress').then(x => x.json());
+    const fill = document.getElementById('progressFill');
+    const text = document.getElementById('progressText');
+    const goLink = document.getElementById('goOccasion');
+    const startBtn = document.getElementById('startBtn');
+    const pct = Math.min(100, Math.round(100 * r.total_ratings / r.min_required));
+    fill.style.width = pct + '%';
+    const isEN = window.getLang && window.getLang() === 'en';
+    if (r.total_ratings >= r.min_required) {
+        text.textContent = isEN
+            ? `${r.total_ratings} ratings ✓ — model trains on the most recent 1500, older ones are ignored`
+            : `${r.total_ratings} 筆 ✓ — 模型只用最近 1500 筆訓練,更舊的會自動忽略,不會堆積`;
+    } else {
+        text.textContent = `${r.total_ratings} / ${r.min_required}`;
+    }
+    // Always allow more training — extra data only helps. After completion
+    // also surface the next-stage shortcut so users can move on if they want.
+    startBtn.style.display = '';
+    goLink.style.display = r.completed ? '' : 'none';
+}
+
+async function startBatch() {
+    const r = await fetch('/training/v2/aesthetic/next').then(x => x.json());
+    if (r.error || !r.outfits) return;
+    currentBatch = r;
+    answers.clear();
+    renderBatch();
+    document.getElementById('introPanel').style.display = 'none';
+    document.getElementById('batchPanel').style.display = '';
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function renderBatch() {
+    const grid = document.getElementById('outfits');
+    grid.innerHTML = '';
+    for (const o of currentBatch.outfits) {
+        const itemsHtml = o.items.map(oi => {
+            const it = oi.item;
+            const img = it && it.image_path ? `<img src="${it.image_path}" alt="${it.name}" />` : `<div class="noimg-mini"></div>`;
+            return `<div class="mini">${img}<div class="mini-name">${it ? it.name : '#' + oi.item_id}</div></div>`;
+        }).join('');
+        const card = document.createElement('div');
+        card.className = 'train-outfit-card';
+        card.dataset.outfitId = o.outfit_id;
+        card.innerHTML = `
+            <div class="train-outfit-items">${itemsHtml}</div>
+            <div class="train-outfit-rate">
+                <div class="rate-label">${t('train2.aes.q')}</div>
+                <div class="rate-row">
+                    <button type="button" class="rate-btn bad" data-r="-1">${t('train2.aes.bad')}</button>
+                    <button type="button" class="rate-btn meh" data-r="0">${t('train2.aes.meh')}</button>
+                    <button type="button" class="rate-btn ok" data-r="1">${t('train2.aes.like')}</button>
+                    <button type="button" class="rate-btn ok" data-r="2">${t('train2.aes.love')}</button>
+                </div>
+            </div>
+        `;
+        const oid = o.outfit_id;
+        card.querySelectorAll('button[data-r]').forEach(b => {
+            b.addEventListener('click', () => {
+                answers.set(oid, parseInt(b.dataset.r));
+                card.querySelectorAll('button[data-r]').forEach(x => x.classList.remove('selected'));
+                b.classList.add('selected');
+                updateSubmit();
+            });
+        });
+        grid.appendChild(card);
+    }
+    updateSubmit();
+}
+
+function updateSubmit() {
+    const total = currentBatch.outfits.length;
+    document.getElementById('filledInfo').textContent = `${answers.size} / ${total}`;
+    document.getElementById('submitBtn').disabled = answers.size < total;
+}
+
+async function submitBatch() {
+    const ratings = [...answers.entries()].map(([outfit_id, rating]) => ({outfit_id, rating}));
+    const r = await fetch('/training/v2/aesthetic/submit', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ratings}),
+    });
+    if (r.ok) {
+        currentBatch = null;
+        answers.clear();
+        document.getElementById('batchPanel').style.display = 'none';
+        document.getElementById('introPanel').style.display = '';
+        await refreshProgress();
+    }
+}
+
+document.getElementById('startBtn').addEventListener('click', startBatch);
+document.getElementById('submitBtn').addEventListener('click', submitBatch);
+refreshProgress();
+window.onLanguageChange = () => {
+    refreshProgress();
+    if (currentBatch) renderBatch();
+};
+</script>
+{% endblock %}

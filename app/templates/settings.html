@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}OutfitDB · 設定{% endblock %}
+{% block title %}{{ brand.app_name }} · 設定{% endblock %}
 {% block content %}
 <h1 data-i18n="settings.title">設定</h1>
 
@@ -70,6 +70,33 @@
     <h2 data-i18n="settings.dataDir_h2">資料夾位置</h2>
     <div id="dataDirInfo" style="font-family:monospace;color:#555;">…</div>
 </section>
+
+<section class="panel">
+    <h2 data-i18n="settings.style_h2">穿搭風格分享</h2>
+    <p style="color:#666;" data-i18n="settings.style_desc">把你訓練好的喜好模型打包成單一檔案,可寄給朋友或備份；接收到別人的檔案後也能匯入,日後拿來借用對方的風格(實際切換為個別功能,目前只是先存下來)。</p>
+
+    <div class="toolbar" style="margin-top:14px;gap:14px;">
+        <button class="btn" id="styleExportBtn" data-i18n="settings.style_export_btn">匯出我的風格</button>
+        <span id="styleExportStatus" style="color:#888;font-size:0.88rem;"></span>
+    </div>
+
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid #eee;">
+        <label style="display:block;font-size:0.92rem;color:#444;margin-bottom:6px;font-weight:600;" data-i18n="settings.style_import_h3">匯入別人的風格</label>
+        <p style="color:#888;font-size:0.85rem;margin-bottom:8px;" data-i18n="settings.style_import_hint">.odstyle 檔案格式跨 Mac / Windows 共用。匯入後存在你的 profile 下不會覆蓋你目前的模型。</p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input id="styleImportFile" type="file" accept=".odstyle,application/zip" />
+            <button class="btn" id="styleImportBtn" data-i18n="settings.style_import_btn">匯入</button>
+            <span id="styleImportStatus" style="color:#888;font-size:0.88rem;"></span>
+        </div>
+    </div>
+
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid #eee;">
+        <label style="display:block;font-size:0.92rem;color:#444;margin-bottom:6px;font-weight:600;" data-i18n="settings.style_imports_h3">已匯入的風格</label>
+        <div id="styleImportsList" style="display:flex;flex-direction:column;gap:6px;font-size:0.9rem;">
+            <span style="color:#aaa;" data-i18n="settings.style_imports_loading">載入中…</span>
+        </div>
+    </div>
+</section>
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/weather.js"></script>
@@ -85,8 +112,13 @@ async function loadSettings() {
     const r = document.querySelector(`input[name="tempUnit"][value="${unit}"]`);
     if (r) r.checked = true;
     // Persist into localStorage so other pages (recommendation/training)
-    // can render in the chosen unit without an extra round-trip.
-    try { localStorage.setItem('od_temp_unit', unit); } catch (e) {}
+    // can render in the chosen unit without an extra round-trip. The
+    // prefix comes from window.OD_BRAND (app/branding.py) so the key
+    // tracks brand renames.
+    try {
+        const lsPrefix = (window.OD_BRAND && window.OD_BRAND.lsPrefix) || 'od_';
+        localStorage.setItem(lsPrefix + 'temp_unit', unit);
+    } catch (e) {}
 
     // Thermal-insoles toggle
     document.getElementById('hasThermalInsoles').checked = !!s.has_thermal_insoles;
@@ -338,12 +370,19 @@ document.querySelectorAll('input[name="tempUnit"]').forEach(r => {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ temp_unit: unit }),
             });
-            try { localStorage.setItem('od_temp_unit', unit); } catch (e) {}
+            try {
+                const lsPrefix = (window.OD_BRAND && window.OD_BRAND.lsPrefix) || 'od_';
+                localStorage.setItem(lsPrefix + 'temp_unit', unit);
+            } catch (e) {}
             status.textContent = '✓';
-            // Notify other open pages so their displays update without reload
-            window.dispatchEvent(new CustomEvent('od-temp-unit-change', { detail: unit }));
-            // Legacy event name kept for any pre-0.2.0 listeners:
-            window.dispatchEvent(new CustomEvent('cm-temp-unit-change', { detail: unit }));
+            // Notify other open pages — fire the canonical event plus
+            // every legacy alias so any old listeners keep working.
+            const evPrefix = (window.OD_BRAND && window.OD_BRAND.eventPrefix) || 'od-';
+            const legacyEvPrefixes = (window.OD_BRAND && window.OD_BRAND.legacyEventPrefixes) || ['cm-'];
+            window.dispatchEvent(new CustomEvent(evPrefix + 'temp-unit-change', { detail: unit }));
+            for (const p of legacyEvPrefixes) {
+                window.dispatchEvent(new CustomEvent(p + 'temp-unit-change', { detail: unit }));
+            }
         } catch (err) {
             status.textContent = 'failed';
         }
@@ -366,7 +405,111 @@ document.getElementById('hasThermalInsoles').addEventListener('change', async (e
     }
 });
 
+// ─── Style sharing (export / import) ────────────────────────────────
+async function loadStyleImports() {
+    const list = document.getElementById('styleImportsList');
+    try {
+        const r = await fetch('/style/imports');
+        if (!r.ok) throw new Error('list failed');
+        const j = await r.json();
+        const items = j.imports || [];
+        if (!items.length) {
+            list.innerHTML = `<span style="color:#aaa;">${t('settings.style_imports_empty')}</span>`;
+            return;
+        }
+        list.innerHTML = items.map(it => {
+            const author = (it.exported_by && it.exported_by.profile) || '?';
+            const fromApp = (it.exported_by && it.exported_by.app) || '?';
+            const fromVer = (it.exported_by && it.exported_by.app_version) || '';
+            const stats = it.stats || {};
+            const statBits = [];
+            if (stats.n_items != null) statBits.push(`${stats.n_items} items`);
+            if (stats.n_ratings != null) statBits.push(`${stats.n_ratings} ratings`);
+            const statStr = statBits.length ? ' · ' + statBits.join(' · ') : '';
+            const axes = (it.axes || []).join(', ');
+            return `<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #eee;padding:8px 10px;border-radius:6px;">
+                <div>
+                    <b>${it.import_id}</b>
+                    <span style="color:#888;"> · ${axes}${statStr}</span>
+                    <div style="color:#aaa;font-size:0.8rem;">from ${fromApp} ${fromVer}${author ? ' · @' + author : ''}</div>
+                </div>
+                <button class="btn secondary" data-import-delete="${it.import_id}" data-i18n="settings.style_import_delete">刪除</button>
+            </div>`;
+        }).join('');
+        // Wire delete buttons
+        list.querySelectorAll('[data-import-delete]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.dataset.importDelete;
+                if (!confirm(t('settings.style_import_delete_confirm', { id }))) return;
+                const r = await fetch(`/style/imports/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                if (r.ok) loadStyleImports();
+                else alert(t('settings.style_import_delete_failed'));
+            });
+        });
+        // Re-translate any newly-rendered i18n attributes
+        if (window.applyTranslations) window.applyTranslations();
+    } catch (e) {
+        list.innerHTML = `<span style="color:#c66;">${t('settings.style_imports_failed')}</span>`;
+    }
+}
+
+document.getElementById('styleExportBtn').addEventListener('click', async () => {
+    const status = document.getElementById('styleExportStatus');
+    status.textContent = t('settings.style_export_running');
+    try {
+        const r = await fetch('/style/export');
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            status.textContent = t('settings.style_export_failed') + ': ' + (err.detail || r.status);
+            return;
+        }
+        const blob = await r.blob();
+        // Pull the suggested filename out of Content-Disposition; fall
+        // back to a brand-aware default.
+        const cd = r.headers.get('Content-Disposition') || '';
+        const match = cd.match(/filename="?([^";]+)"?/);
+        const ext = (window.OD_BRAND && window.OD_BRAND.stylePackExtension) || '.odstyle';
+        const fallback = ((window.OD_BRAND && window.OD_BRAND.appName) || 'app') + '-style' + ext;
+        const filename = (match && match[1]) || fallback;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        status.textContent = t('settings.style_export_done');
+    } catch (e) {
+        status.textContent = t('settings.style_export_failed') + ': ' + e.message;
+    }
+});
+
+document.getElementById('styleImportBtn').addEventListener('click', async () => {
+    const fileEl = document.getElementById('styleImportFile');
+    const status = document.getElementById('styleImportStatus');
+    if (!fileEl.files || !fileEl.files[0]) {
+        status.textContent = t('settings.style_import_pick_file');
+        return;
+    }
+    status.textContent = t('settings.style_import_running');
+    const fd = new FormData();
+    fd.append('file', fileEl.files[0]);
+    try {
+        const r = await fetch('/style/import', { method: 'POST', body: fd });
+        const j = await r.json();
+        if (!r.ok) {
+            status.textContent = t('settings.style_import_failed') + ': ' + (j.detail || r.status);
+            return;
+        }
+        status.textContent = t('settings.style_import_done', { id: j.import_id });
+        fileEl.value = '';
+        loadStyleImports();
+    } catch (e) {
+        status.textContent = t('settings.style_import_failed') + ': ' + e.message;
+    }
+});
+
 loadSettings();
-window.onLanguageChange = loadSettings;
+loadStyleImports();
+window.onLanguageChange = () => { loadSettings(); loadStyleImports(); };
 </script>
 {% endblock %}

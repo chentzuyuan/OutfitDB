@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}OutfitDB · Home{% endblock %}
+{% block title %}{{ brand.app_name }} · Home{% endblock %}
 {% block content %}
 <div id="hero" class="hero-big">
     <div id="heroContent">
-        <h1 data-i18n="home.title">OutfitDB</h1>
+        <h1 data-i18n="home.title">{{ brand.app_name }}</h1>
         <p class="sub" data-i18n="home.loading">載入中…</p>
     </div>
 </div>
@@ -14,17 +14,23 @@
 {% endblock %}
 {% block scripts %}
 <script>
-const SKIP_KEY = 'od_skipped_steps';
-const LEGACY_SKIP_KEY = 'cm_skipped_steps';
-// Migrate pre-0.2.0 skipped-step list so the home checklist remembers
-// which optional steps the user already dismissed.
+// localStorage prefix comes from window.OD_BRAND (set by base.html →
+// app/branding.py). Pre-existing values under any legacy prefix are
+// auto-migrated so the home checklist remembers which optional steps
+// the user already dismissed across a brand rename.
+const _SKIP_LS_PREFIX = (window.OD_BRAND && window.OD_BRAND.lsPrefix) || 'od_';
+const _LEGACY_SKIP_PREFIXES = (window.OD_BRAND && window.OD_BRAND.legacyLsPrefixes) || ['cm_'];
+const SKIP_KEY = _SKIP_LS_PREFIX + 'skipped_steps';
 try {
-    const legacy = localStorage.getItem(LEGACY_SKIP_KEY);
-    if (legacy != null && localStorage.getItem(SKIP_KEY) == null) {
-        localStorage.setItem(SKIP_KEY, legacy);
-    }
-    if (legacy != null) {
-        localStorage.removeItem(LEGACY_SKIP_KEY);
+    for (const p of _LEGACY_SKIP_PREFIXES) {
+        const legacyKey = p + 'skipped_steps';
+        const legacy = localStorage.getItem(legacyKey);
+        if (legacy != null && localStorage.getItem(SKIP_KEY) == null) {
+            localStorage.setItem(SKIP_KEY, legacy);
+        }
+        if (legacy != null) {
+            localStorage.removeItem(legacyKey);
+        }
     }
 } catch (e) { /* private mode — ignore */ }
 function getSkipped() {

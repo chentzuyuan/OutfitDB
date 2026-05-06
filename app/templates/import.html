@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}OutfitDB · Bulk Import{% endblock %}
+{% block title %}{{ brand.app_name }} · Bulk Import{% endblock %}
 {% block content %}
 <h1 data-i18n="import.title">CSV 批次匯入</h1>
 
@@ -115,7 +115,7 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
 // automatically (no need to remember to sync two strings).
 const HEADER_LINE = TEMPLATE.split('\n')[0];
 
-const AI_PROMPT = `I need you to help me build a wardrobe CSV file for OutfitDB. Ask me
+const AI_PROMPT = `I need you to help me build a wardrobe CSV file for ${window.OD_BRAND?.appName || 'OutfitDB'}. Ask me
 questions about each clothing item, then output ONE clean CSV.
 
 DO NOT:

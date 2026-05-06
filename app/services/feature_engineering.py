@@ -4,6 +4,18 @@ import numpy as np
 from .. import models
 
 
+# Bumped whenever the feature vector layout changes (new column inserted,
+# vocab reordered, dimension changed, encoding semantics altered). The
+# style-pack importer compares this against the value stored in a pack's
+# manifest and refuses to load a model trained on an incompatible
+# pipeline — otherwise inference would silently produce garbage.
+#
+# History:
+#   1 — 0.3.0: initial published version (matches the Phase-4 layout
+#       inherited from 0.2.x, frozen now that style packs ship).
+FEATURE_VERSION = 1
+
+
 COLOR_VOCAB = [
     "black", "white", "gray", "navy", "blue", "brown", "beige",
     "green", "red", "pink", "yellow", "orange", "purple",

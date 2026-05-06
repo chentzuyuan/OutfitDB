@@ -1,14 +1,16 @@
 """Local-first config: profiles auto-discovered from <project>/profiles/.
 Each subfolder of profiles/ that contains an `items/` subdir is a profile.
-Active profile is remembered in ~/.outfitdb/active (per-user, per-project).
+Active profile is remembered in ~/<USER_STATE_DIRNAME>/active (per-user,
+per-project).
 
 This means: zip the whole wardrobe_env/ folder, send to anyone — they unzip,
 run the server, and Bruce + Clark profiles auto-show. No path config needed.
 
-Legacy migration: pre-v0.2.0 builds wrote to ~/.closetmind/ and
-~/Library/Application Support/ClosetMind/. On first launch under the new
-name we silently migrate those to the new locations so existing users
-keep their wardrobe + active-profile pointer without any setup.
+Brand-coupled paths (~/.outfitdb, "OutfitDB" subfolder under Application
+Support, OUTFITDB_* env vars) all come from app/branding.py. Renaming the
+app means editing that one module; this file walks branding.LEGACY_* on
+first launch so existing users keep their wardrobe + active-profile
+pointer without any manual migration.
 """
 import json
 import os
@@ -16,6 +18,8 @@ import shutil
 import sys
 from pathlib import Path
 from typing import List, Optional
+
+from . import branding
 
 
 # closetmind/app/config.py → wardrobe_env/
@@ -31,52 +35,54 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 #   integrity, (b) be wiped on every app update, (c) be blocked by
 #   Gatekeeper on some configurations. Use the OS-standard app-data
 #   location instead so user data survives app updates and reinstalls.
+def _platform_app_data_root(app_data_dirname: str) -> Path:
+    """Build the platform-specific path that hosts <app_data_dirname>/profiles."""
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / app_data_dirname / "profiles"
+    if sys.platform == "win32":
+        base = os.getenv("APPDATA") or str(Path.home())
+        return Path(base) / app_data_dirname / "profiles"
+    # Linux / other Unix — XDG Base Directory spec
+    xdg = os.getenv("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(xdg) / app_data_dirname / "profiles"
+
+
 def _default_profiles_root() -> Path:
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-        if sys.platform == "darwin":
-            return Path.home() / "Library" / "Application Support" / "OutfitDB" / "profiles"
-        if sys.platform == "win32":
-            base = os.getenv("APPDATA") or str(Path.home())
-            return Path(base) / "OutfitDB" / "profiles"
-        # Linux / other Unix — XDG Base Directory spec
-        xdg = os.getenv("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-        return Path(xdg) / "OutfitDB" / "profiles"
+        return _platform_app_data_root(branding.APP_DATA_DIRNAME)
     return PROJECT_ROOT / "profiles"
 
 
-def _legacy_profiles_root() -> Optional[Path]:
-    """Pre-v0.2.0 (ClosetMind) frozen-app data location, if it exists."""
+def _legacy_profiles_roots() -> List[Path]:
+    """Frozen-app data locations for every previous brand name, in
+    most-recent-first order. Returns only the dirs that actually exist."""
     if not (getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")):
-        return None
-    if sys.platform == "darwin":
-        p = Path.home() / "Library" / "Application Support" / "ClosetMind" / "profiles"
-    elif sys.platform == "win32":
-        base = os.getenv("APPDATA") or str(Path.home())
-        p = Path(base) / "ClosetMind" / "profiles"
-    else:
-        xdg = os.getenv("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-        p = Path(xdg) / "ClosetMind" / "profiles"
-    return p if p.exists() else None
+        return []
+    out: List[Path] = []
+    for legacy_name in branding.LEGACY_APP_DATA_DIRNAMES:
+        p = _platform_app_data_root(legacy_name)
+        if p.exists():
+            out.append(p)
+    return out
 
 
 DEFAULT_PROFILES_ROOT = _default_profiles_root()
 
 # Override via env var (e.g., for cloud deployment / testing).
-# Prefer OUTFITDB_PROFILES_ROOT; fall back to legacy CLOSETMIND_PROFILES_ROOT
-# so existing Render deploys keep working until they redeploy.
+# branding.resolve_env walks the canonical OUTFITDB_PROFILES_ROOT first,
+# then any legacy CLOSETMIND_PROFILES_ROOT — so existing Render deploys
+# keep working until they redeploy and pick up the new var name.
 PROFILES_ROOT = Path(
-    os.getenv("OUTFITDB_PROFILES_ROOT")
-    or os.getenv("CLOSETMIND_PROFILES_ROOT")
-    or DEFAULT_PROFILES_ROOT
+    branding.resolve_env("PROFILES_ROOT") or DEFAULT_PROFILES_ROOT
 ).resolve()
 
 # Per-user state (which profile is active). Not part of project.
-USER_STATE_DIR = Path.home() / ".outfitdb"
+USER_STATE_DIR = branding.user_state_dir()
 ACTIVE_FILE = USER_STATE_DIR / "active"
 
-# Pre-v0.2.0 (ClosetMind) per-user state — used only for one-time migration.
-LEGACY_USER_STATE_DIR = Path.home() / ".closetmind"
-LEGACY_CONFIG_FILE = LEGACY_USER_STATE_DIR / "config.json"
+# Legacy per-user state dirs — used for one-time migration only.
+LEGACY_USER_STATE_DIRS = branding.legacy_user_state_dirs()
+LEGACY_CONFIG_FILES = [d / "config.json" for d in LEGACY_USER_STATE_DIRS]
 
 
 def _ensure_dirs():
@@ -85,40 +91,49 @@ def _ensure_dirs():
 
 
 def _migrate_user_state_dir():
-    """Move ~/.closetmind/active → ~/.outfitdb/active on first launch under the
-    new name. Idempotent — only runs if the old dir exists and the new one
-    doesn't already have an active file. Safe to call on every startup."""
-    if not LEGACY_USER_STATE_DIR.exists():
-        return
+    """Mirror legacy ~/.<old-brand>/active → ~/.<new-brand>/active on first
+    launch under the new name. Walks every entry in
+    branding.LEGACY_USER_STATE_DIRNAMES so future renames keep working
+    transitively. Idempotent — only copies if the new file is missing."""
     USER_STATE_DIR.mkdir(parents=True, exist_ok=True)
-    legacy_active = LEGACY_USER_STATE_DIR / "active"
-    if legacy_active.exists() and not ACTIVE_FILE.exists():
-        try:
-            shutil.copy2(legacy_active, ACTIVE_FILE)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[config] migrate active pointer failed: {exc}")
+    if ACTIVE_FILE.exists():
+        return
+    for legacy_dir in LEGACY_USER_STATE_DIRS:
+        legacy_active = legacy_dir / "active"
+        if legacy_active.exists():
+            try:
+                shutil.copy2(legacy_active, ACTIVE_FILE)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[config] migrate active pointer failed: {exc}")
+            else:
+                return  # first hit wins
 
 
 def _migrate_frozen_app_data():
-    """Copy ~/Library/Application Support/ClosetMind/profiles → .../OutfitDB/profiles
-    if the legacy dir exists and the new one is empty. Frozen-app only."""
-    legacy = _legacy_profiles_root()
-    if legacy is None:
+    """Copy any legacy app-data dir's profiles into the new location if
+    the new one is empty. Frozen-app only. Walks legacy brand names in
+    most-recent-first order."""
+    legacy_roots = _legacy_profiles_roots()
+    if not legacy_roots:
         return
     new = DEFAULT_PROFILES_ROOT
     new.mkdir(parents=True, exist_ok=True)
-    # Only migrate if new is empty (no profile dirs yet)
     has_existing = any(c.is_dir() for c in new.iterdir()) if new.exists() else False
     if has_existing:
         return
-    try:
-        for child in legacy.iterdir():
-            if child.is_dir():
-                target = new / child.name
-                if not target.exists():
-                    shutil.copytree(child, target)
-    except Exception as exc:  # noqa: BLE001
-        print(f"[config] migrate frozen-app data failed: {exc}")
+    for legacy in legacy_roots:
+        try:
+            for child in legacy.iterdir():
+                if child.is_dir():
+                    target = new / child.name
+                    if not target.exists():
+                        shutil.copytree(child, target)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[config] migrate frozen-app data from {legacy} failed: {exc}")
+            continue
+        # Stop after the first legacy that produced any output
+        if any(c.is_dir() for c in new.iterdir()):
+            return
 
 
 # Run migrations once at import time. Idempotent — noop on every subsequent run.
@@ -126,9 +141,10 @@ _migrate_user_state_dir()
 _migrate_frozen_app_data()
 
 
-# Honour both the new and legacy env-var names so existing Render configs
-# keep working through the rename.
-RENDER_MODE = bool(os.getenv("OUTFITDB_RENDER_MODE") or os.getenv("CLOSETMIND_RENDER_MODE"))
+# RENDER_MODE flag — true when we're running inside a Render container.
+# branding.resolve_env walks OUTFITDB_RENDER_MODE then any legacy
+# CLOSETMIND_RENDER_MODE, so existing deploys keep working through a rename.
+RENDER_MODE = bool(branding.resolve_env("RENDER_MODE"))
 
 
 def _locate_tester_seed() -> Optional[Path]:
@@ -269,15 +285,18 @@ def ensure_data_dir_structure(data_dir: Path) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "items" / "images").mkdir(parents=True, exist_ok=True)
     (data_dir / "models" / "archive").mkdir(parents=True, exist_ok=True)
+    (data_dir / "models" / "imported").mkdir(parents=True, exist_ok=True)
     readme = data_dir / "README.txt"
     if not readme.exists():
+        title = f"{branding.APP_NAME} profile folder"
         readme.write_text(
-            "OutfitDB profile folder\n"
-            "=======================\n\n"
+            f"{title}\n"
+            f"{'=' * len(title)}\n\n"
             "wardrobe.db        — SQLite (items / ratings / outfits / contexts ...)\n"
             "items/images/      — clothing photos\n"
             "models/current.json — XGBoost preference model\n"
-            "models/archive/    — older models, auto-archived on retrain\n",
+            "models/archive/    — older models, auto-archived on retrain\n"
+            "models/imported/   — style packs imported from other users\n",
             encoding="utf-8",
         )
 
@@ -310,36 +329,37 @@ def reset_active() -> None:
 
 
 def migrate_legacy_config() -> None:
-    """Old format: ~/.closetmind/config.json with absolute data_dirs.
-    New format: profiles/* folders + ~/.outfitdb/active.
-    Idempotent: safe to call repeatedly. Migrates folders into profiles/, then
-    backs up the legacy config so we don't redo this.
+    """Old format: ~/.<legacy-brand>/config.json with absolute data_dirs.
+    New format: profiles/* folders + ~/<USER_STATE_DIRNAME>/active.
+    Idempotent: safe to call repeatedly. Migrates folders into
+    profiles/, then backs up each legacy config so we don't redo it.
     """
-    if not LEGACY_CONFIG_FILE.exists():
-        return
-    try:
-        cfg = json.loads(LEGACY_CONFIG_FILE.read_text())
-    except Exception:
-        return
-    profiles = cfg.get("profiles", [])
-    active = cfg.get("active")
-    _ensure_dirs()
-    for p in profiles:
-        name = p.get("name")
-        path_str = p.get("data_dir")
-        if not name or not path_str:
+    for legacy_config_file in LEGACY_CONFIG_FILES:
+        if not legacy_config_file.exists():
             continue
-        old = Path(path_str).expanduser().resolve()
-        new = PROFILES_ROOT / name
-        if old.exists() and old.is_dir() and not new.exists():
-            try:
-                shutil.move(str(old), str(new))
-            except Exception:
-                pass
-    if active and (PROFILES_ROOT / active).exists():
-        ACTIVE_FILE.write_text(active)
-    # back up legacy config so we don't run this again
-    try:
-        LEGACY_CONFIG_FILE.rename(LEGACY_CONFIG_FILE.with_suffix(".json.bak"))
-    except Exception:
-        pass
+        try:
+            cfg = json.loads(legacy_config_file.read_text())
+        except Exception:
+            continue
+        profiles = cfg.get("profiles", [])
+        active = cfg.get("active")
+        _ensure_dirs()
+        for p in profiles:
+            name = p.get("name")
+            path_str = p.get("data_dir")
+            if not name or not path_str:
+                continue
+            old = Path(path_str).expanduser().resolve()
+            new = PROFILES_ROOT / name
+            if old.exists() and old.is_dir() and not new.exists():
+                try:
+                    shutil.move(str(old), str(new))
+                except Exception:
+                    pass
+        if active and (PROFILES_ROOT / active).exists():
+            ACTIVE_FILE.write_text(active)
+        # back up legacy config so we don't run this again
+        try:
+            legacy_config_file.rename(legacy_config_file.with_suffix(".json.bak"))
+        except Exception:
+            pass

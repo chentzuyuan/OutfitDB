@@ -36,6 +36,32 @@ import sys
 block_cipher = None
 PROJECT_ROOT = os.path.abspath(os.path.dirname(SPEC))
 
+# Read brand identity from app/branding.py so renaming the app is a
+# one-file edit. We can't `import app.branding` directly because the
+# spec file runs before pip's package install paths are guaranteed,
+# so we exec the module text instead — same outcome, no sys.path mess.
+_branding_ns = {}
+with open(os.path.join(PROJECT_ROOT, "app", "branding.py"), encoding="utf-8") as _bf:
+    exec(_bf.read(), _branding_ns)
+APP_NAME = _branding_ns["APP_NAME"]
+APP_BUNDLE_ID = _branding_ns["APP_BUNDLE_ID"]
+
+# App version comes from app/version.py (separate file so the spec
+# doesn't need to update on every release).
+_version_ns = {}
+with open(os.path.join(PROJECT_ROOT, "app", "version.py"), encoding="utf-8") as _vf:
+    # version.py imports branding via `from . import branding` which
+    # fails when exec'd in isolation — strip that line to keep this
+    # bootstrap simple. We only need APP_VERSION here.
+    _src = _vf.read()
+    _src = "\n".join(line for line in _src.splitlines() if line.strip() != "from . import branding")
+    # Stub out branding usages we don't need at spec time.
+    _src = _src.replace("branding.resolve_env(\"UPDATE_FEED\")", "None")
+    _src = _src.replace("branding.DEFAULT_UPDATE_FEED", "''")
+    _src = _src.replace("branding.APP_NAME", repr(APP_NAME))
+    exec(_src, _version_ns)
+APP_VERSION = _version_ns["APP_VERSION"]
+
 
 # ─── 1. Templates + static files (Jinja2 / StaticFiles fix) ─────────────
 datas = [
@@ -134,7 +160,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="OutfitDB",
+    name=APP_NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -156,22 +182,22 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="OutfitDB",
+    name=APP_NAME,
 )
 
 # macOS .app bundle wrapper
 if sys.platform == "darwin":
     app = BUNDLE(
         coll,
-        name="OutfitDB.app",
+        name=f"{APP_NAME}.app",
         icon=None,        # TODO: add app/static/icons/icon-512.png as .icns
-        bundle_identifier="com.outfitdb.app",
-        version="0.2.0",
+        bundle_identifier=APP_BUNDLE_ID,
+        version=APP_VERSION,
         info_plist={
-            "CFBundleName": "OutfitDB",
-            "CFBundleDisplayName": "OutfitDB",
-            "CFBundleVersion": "0.2.0",
-            "CFBundleShortVersionString": "0.2.0",
+            "CFBundleName": APP_NAME,
+            "CFBundleDisplayName": APP_NAME,
+            "CFBundleVersion": APP_VERSION,
+            "CFBundleShortVersionString": APP_VERSION,
             "NSHighResolutionCapable": True,
             # Don't auto-show the Python window; we use the system browser
             # for the actual UI. The terminal output is for debugging.

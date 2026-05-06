@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}OutfitDB · Training{% endblock %}
+{% block title %}{{ brand.app_name }} · Training{% endblock %}
 {% block content %}
 <h1 data-i18n="train.title">Training</h1>
 
@@ -14,7 +14,7 @@
         <div class="train-progress-text" id="trainProgressText">0 / 6</div>
     </div>
     <button class="btn run-big" id="startBatchBtn" data-i18n="train.start_batch">開始下一批</button>
-    <a href="/recommend" id="goRecommendLink" class="btn secondary" style="display:none;margin-left:8px;" data-i18n="train.go_recommend">開始用 OutfitDB</a>
+    <a href="/recommend" id="goRecommendLink" class="btn secondary" style="display:none;margin-left:8px;" data-i18n="train.go_recommend">開始用 {{ brand.app_name }}</a>
 </section>
 
 <section class="panel" id="batchPanel" style="display:none;">

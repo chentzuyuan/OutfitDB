@@ -5,9 +5,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from . import crud, config
+from . import crud, config, branding
 from .database import Base, engine, SessionLocal, run_all_migrations
-from .routers import items, outfits, ratings, recommendations, contexts, train, setup, settings as settings_router, stats as stats_router, profiles as profiles_router, training as training_router, training_v2 as training_v2_router
+from .routers import items, outfits, ratings, recommendations, contexts, train, setup, settings as settings_router, stats as stats_router, profiles as profiles_router, training as training_router, training_v2 as training_v2_router, style as style_router
 from .version import APP_VERSION, get_version_status
 
 
@@ -69,9 +69,17 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="OutfitDB", lifespan=lifespan)
+app = FastAPI(title=branding.APP_NAME, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Expose brand identifiers to every template as `brand.*` and the JSON-
+# serialisable subset as `brand_js` (for the window.OD_BRAND injector
+# in base.html). Renaming the app: edit branding.py and every template
+# rebrands automatically on next request.
+import json as _json
+templates.env.globals["brand"] = branding.jinja_globals()
+templates.env.globals["brand_js_json"] = _json.dumps(branding.js_globals())
 
 
 app.include_router(setup.router)
@@ -86,6 +94,7 @@ app.include_router(recommendations.router)
 app.include_router(train.router)
 app.include_router(training_router.router)
 app.include_router(training_v2_router.router)
+app.include_router(style_router.router)
 
 
 @app.middleware("http")

@@ -3,6 +3,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
+from . import branding
 from .config import get_data_dir
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -17,9 +18,9 @@ def _resolve_db_url() -> str:
         return env_url.replace("postgres://", "postgresql://", 1) if env_url.startswith("postgres://") else env_url
     data_dir = get_data_dir()
     if data_dir is not None:
-        return f"sqlite:///{data_dir / 'wardrobe.db'}"
+        return f"sqlite:///{data_dir / branding.WARDROBE_DB_FILENAME}"
     # Pre-setup fallback: keep importable so /setup page can run
-    return f"sqlite:///{LEGACY_DATA_DIR / 'outfitdb.db'}"
+    return f"sqlite:///{LEGACY_DATA_DIR / branding.LEGACY_FALLBACK_DB_FILENAME}"
 
 
 DATABASE_URL = _resolve_db_url()

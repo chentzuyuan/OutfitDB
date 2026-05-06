@@ -6,10 +6,11 @@
 // references a key that only exists in the newer file. Worth the small
 // perf cost on cold load.
 //
-// Bumping the cache key to od-v1 (was cm-v30) on the OutfitDB rename forces
-// every existing client to drop the old cache on first load — this is what
-// purges the cached "ClosetMind" branding from PWA-installed instances.
-const VERSION = 'od-v1';
+// Bump VERSION on every brand rename + on any non-trivial JS/CSS push
+// — installed PWAs hold the cache until VERSION changes, so a stale
+// cache otherwise serves the previous brand's <title> + hero text long
+// after a rename ships.
+const VERSION = 'od-v2';
 const SHELL = [
     '/',
     '/static/css/app.css',

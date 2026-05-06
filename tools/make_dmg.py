@@ -1,10 +1,13 @@
-"""Wrap the built OutfitDB.app in a macOS .dmg installer.
+"""Wrap the built .app in a macOS .dmg installer.
 
-Usage (run AFTER tools/build_app.py has produced dist/OutfitDB.app):
+The brand name comes from app/branding.py — renaming the brand updates
+the volume name + DMG filename automatically on the next build.
+
+Usage (run AFTER tools/build_app.py has produced dist/<APP_NAME>.app):
     .venv/bin/python -m tools.make_dmg
 
 Output:
-    dist/OutfitDB-{version}.dmg
+    dist/<APP_NAME>-{version}.dmg
 
 Why DMG over a plain .zip:
   - macOS users recognize the "drag-to-Applications" pattern instantly.
@@ -32,8 +35,11 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+from app import branding  # noqa: E402
+
 DIST = PROJECT_ROOT / "dist"
-APP = DIST / "OutfitDB.app"
+APP = DIST / f"{branding.APP_NAME}.app"
 STAGING = DIST / "_dmg_staging"
 
 
@@ -56,11 +62,11 @@ def main() -> None:
         sys.exit(1)
 
     version = _read_version()
-    dmg_name = f"OutfitDB-{version}.dmg"
+    dmg_name = f"{branding.APP_NAME}-{version}.dmg"
     dmg_path = DIST / dmg_name
 
     # Build a staging directory containing exactly:
-    #   OutfitDB.app    — the actual application
+    #   <APP_NAME>.app    — the actual application
     #   Applications      — symlink to /Applications, so the user sees
     #                        an Applications folder icon and drags the
     #                        .app onto it.
@@ -70,7 +76,7 @@ def main() -> None:
     STAGING.mkdir(parents=True)
     # copytree with symlinks=True preserves the .app's internal symlinks
     # (PyInstaller bundles contain links into Python.framework/Versions/)
-    shutil.copytree(APP, STAGING / "OutfitDB.app", symlinks=True)
+    shutil.copytree(APP, STAGING / f"{branding.APP_NAME}.app", symlinks=True)
     (STAGING / "Applications").symlink_to("/Applications")
 
     # Replace any old DMG so hdiutil doesn't refuse to overwrite.
@@ -89,7 +95,7 @@ def main() -> None:
     print(f"[make_dmg] creating {dmg_path}")
     subprocess.check_call([
         "hdiutil", "create",
-        "-volname", "OutfitDB",
+        "-volname", branding.APP_NAME,
         "-srcfolder", str(STAGING),
         "-ov", "-format", "ULFO", "-fs", "HFS+",
         str(dmg_path),

@@ -1,8 +1,12 @@
-// Minimal client-side i18n for OutfitDB.
+// Minimal client-side i18n for the app.
 // Strings tagged with data-i18n="key" or data-i18n-attr="attr:key" get translated.
 // JS-generated strings can call window.t('key').
 //
-// localStorage key: od_lang (was cm_lang pre-0.2.0; auto-migrated below).
+// localStorage key + brand placeholder both read through window.OD_BRAND
+// (set by base.html from app/branding.py). Translations that mention the
+// brand name use the literal token __BRAND__ — t() substitutes it from
+// OD_BRAND.appName, so renaming the app updates every translated string
+// in one go without touching this file.
 
 const TRANSLATIONS = {
     zh: {
@@ -34,7 +38,7 @@ const TRANSLATIONS = {
         'nav.profile_delete_batch_confirm': '確定刪除：{names}？\n資料夾與所有衣物 / 評分 / 模型都會被刪除（不可復原）。',
 
         // ─── Home ───
-        'home.title': 'OutfitDB',
+        'home.title': '__BRAND__',
         'home.loading': '載入中…',
         'home.checklist_title': '設定進度',
         'home.optional': '（可選）',
@@ -161,7 +165,7 @@ const TRANSLATIONS = {
         'train.aesthetic_label': '美感',
         'train.zone_label': '適合的氣溫',
         'train.done_title': '訓練完成',
-        'train.go_recommend': '開始用 OutfitDB',
+        'train.go_recommend': '開始用 __BRAND__',
 
         // ─── Settings page ───
         'settings.title': '設定',
@@ -188,6 +192,27 @@ const TRANSLATIONS = {
         'settings.thermal_desc': '勾起來,代表你平常出門會自動穿一條內搭褲 / 鞋墊 / 內搭衣 — 推薦頁就不會再特別提醒你加內搭。',
         'settings.thermal_toggle': '我自備內搭 / 鞋墊',
         'settings.dataDir_h2': '資料夾位置',
+        // ─── Style sharing (settings.style_*) ───
+        'settings.style_h2': '穿搭風格分享',
+        'settings.style_desc': '把你訓練好的喜好模型打包成單一檔案,可寄給朋友或備份；接收到別人的檔案後也能匯入。',
+        'settings.style_export_btn': '匯出我的風格',
+        'settings.style_export_running': '打包中…',
+        'settings.style_export_done': '已下載',
+        'settings.style_export_failed': '匯出失敗',
+        'settings.style_import_h3': '匯入別人的風格',
+        'settings.style_import_hint': '.odstyle 檔案跨 Mac / Windows 共用。匯入後存在你的 profile 下,不會覆蓋目前的模型。',
+        'settings.style_import_btn': '匯入',
+        'settings.style_import_pick_file': '請先選擇 .odstyle 檔案',
+        'settings.style_import_running': '匯入中…',
+        'settings.style_import_done': '已匯入: {id}',
+        'settings.style_import_failed': '匯入失敗',
+        'settings.style_imports_h3': '已匯入的風格',
+        'settings.style_imports_loading': '載入中…',
+        'settings.style_imports_empty': '尚未匯入任何風格',
+        'settings.style_imports_failed': '無法載入清單',
+        'settings.style_import_delete': '刪除',
+        'settings.style_import_delete_confirm': '確定刪除「{id}」?',
+        'settings.style_import_delete_failed': '刪除失敗',
         'settings.no_location_warn': '尚未設定位置 — 按下方按鈕開始',
         'settings.current_location': '目前位置',
         'settings.btn_locating': '① 定位中…',
@@ -429,10 +454,10 @@ const TRANSLATIONS = {
         'train2.occ.start': '開始下一批',
         'train2.occ.submit': '送出這批',
         'train2.occ.q': '這套適合什麼場合？(可多選)',
-        'train2.occ.goto_recommend': '開始用 OutfitDB',
+        'train2.occ.goto_recommend': '開始用 __BRAND__',
 
         // ─── Setup ───
-        'setup.welcome_title': '歡迎使用 OutfitDB',
+        'setup.welcome_title': '歡迎使用 __BRAND__',
         'setup.intro': '建立第一個 Profile — 替你的衣櫃命名。所有資料(衣物、圖片、模型)會存在你電腦的應用資料夾,App 重灌後也不會消失。',
         'setup.profile_name_label': 'Profile 名稱',
         'setup.name_hint': '不可含 / \\ 或以 . 開頭。建議用簡單英文。',
@@ -478,7 +503,7 @@ const TRANSLATIONS = {
         'nav.profile_delete_batch_confirm': 'Delete: {names}?\nFolder + all items / ratings / models will be removed (cannot undo).',
 
         // ─── Home ───
-        'home.title': 'OutfitDB',
+        'home.title': '__BRAND__',
         'home.loading': 'Loading…',
         'home.checklist_title': 'Setup progress',
         'home.optional': ' (optional)',
@@ -603,7 +628,7 @@ const TRANSLATIONS = {
         'train.aesthetic_label': 'Aesthetic',
         'train.zone_label': 'Best temperature zone',
         'train.done_title': 'Training complete',
-        'train.go_recommend': 'Start using OutfitDB',
+        'train.go_recommend': 'Start using __BRAND__',
 
         // ─── Settings page ───
         'settings.title': 'Settings',
@@ -630,6 +655,27 @@ const TRANSLATIONS = {
         'settings.thermal_desc': 'Tick this if you typically head out wearing thermal leggings / insoles / a base layer. The recommendation card will skip the "add thermals" nudges since they\'re already implicit.',
         'settings.thermal_toggle': 'I always wear thermal innerwear / insoles',
         'settings.dataDir_h2': 'Data folder',
+        // ─── Style sharing (settings.style_*) ───
+        'settings.style_h2': 'Style sharing',
+        'settings.style_desc': 'Bundle your trained preference model into a single file you can send to a friend or back up. Files you receive can be imported here too — for now they\'re just stored; switching to use a borrowed style is a separate feature coming later.',
+        'settings.style_export_btn': 'Export my style',
+        'settings.style_export_running': 'Packing…',
+        'settings.style_export_done': 'Downloaded',
+        'settings.style_export_failed': 'Export failed',
+        'settings.style_import_h3': 'Import someone\'s style',
+        'settings.style_import_hint': '.odstyle files work the same on Mac / Windows. Imports live alongside your own model — they don\'t overwrite it.',
+        'settings.style_import_btn': 'Import',
+        'settings.style_import_pick_file': 'Please pick a .odstyle file first',
+        'settings.style_import_running': 'Importing…',
+        'settings.style_import_done': 'Imported: {id}',
+        'settings.style_import_failed': 'Import failed',
+        'settings.style_imports_h3': 'Imported styles',
+        'settings.style_imports_loading': 'Loading…',
+        'settings.style_imports_empty': 'No styles imported yet',
+        'settings.style_imports_failed': 'Could not load the list',
+        'settings.style_import_delete': 'Delete',
+        'settings.style_import_delete_confirm': 'Delete "{id}"?',
+        'settings.style_import_delete_failed': 'Delete failed',
         'settings.no_location_warn': 'No location set — click the button below to start',
         'settings.current_location': 'Current location',
         'settings.btn_locating': '① Locating…',
@@ -871,10 +917,10 @@ const TRANSLATIONS = {
         'train2.occ.start': 'Start next batch',
         'train2.occ.submit': 'Submit batch',
         'train2.occ.q': 'Which events suit this outfit? (multi-select)',
-        'train2.occ.goto_recommend': 'Start using OutfitDB',
+        'train2.occ.goto_recommend': 'Start using __BRAND__',
 
         // ─── Setup ───
-        'setup.welcome_title': 'Welcome to OutfitDB',
+        'setup.welcome_title': 'Welcome to __BRAND__',
         'setup.intro': 'Create your first profile — name your closet. All your data (clothes, photos, trained models) lives in your local application data folder and survives app reinstalls.',
         'setup.profile_name_label': 'Profile name',
         'setup.name_hint': 'No / \\ or leading dots. Simple English names work best.',
@@ -893,18 +939,27 @@ const TRANSLATIONS = {
     },
 };
 
-const I18N_KEY = 'od_lang';
-const LEGACY_I18N_KEY = 'cm_lang';
+// localStorage key for the user's chosen language. Built from
+// window.OD_BRAND.lsPrefix (set by base.html → app/branding.py) so a
+// future brand rename only edits branding.py — this file picks up the
+// new prefix automatically. Defensive fallback to 'od_' for the rare
+// case OD_BRAND failed to inject.
+const _LS_PREFIX = (window.OD_BRAND && window.OD_BRAND.lsPrefix) || 'od_';
+const I18N_KEY = _LS_PREFIX + 'lang';
+// Every prior brand's prefix gets mirror-migrated below so a user who
+// upgrades through multiple renames doesn't lose their language pick.
+const _LEGACY_PREFIXES = (window.OD_BRAND && window.OD_BRAND.legacyLsPrefixes) || ['cm_'];
 
-// One-shot migration: if the user has a pre-0.2.0 cm_lang value, copy it
-// into od_lang so their language pick survives the rename.
 try {
-    const legacy = localStorage.getItem(LEGACY_I18N_KEY);
-    if (legacy != null && localStorage.getItem(I18N_KEY) == null) {
-        localStorage.setItem(I18N_KEY, legacy);
-    }
-    if (legacy != null) {
-        localStorage.removeItem(LEGACY_I18N_KEY);
+    for (const p of _LEGACY_PREFIXES) {
+        const legacyKey = p + 'lang';
+        const legacy = localStorage.getItem(legacyKey);
+        if (legacy != null && localStorage.getItem(I18N_KEY) == null) {
+            localStorage.setItem(I18N_KEY, legacy);
+        }
+        if (legacy != null) {
+            localStorage.removeItem(legacyKey);
+        }
     }
 } catch (e) { /* private mode — ignore */ }
 
@@ -927,8 +982,21 @@ function _tOrNull(key) {
     return (typeof v === 'string' && v.length > 0) ? v : null;
 }
 
+// Resolve the brand placeholder. base.html injects window.OD_BRAND
+// before this script loads, but we still defend against it being
+// missing (e.g. cached static page hitting an old base) by falling
+// back to the literal token, which at least makes the bug visible.
+function _brandName() {
+    return (window.OD_BRAND && window.OD_BRAND.appName) || '__BRAND__';
+}
+
 window.t = function (key, vars) {
     let s = _tOrNull(key) ?? key;  // legacy fallback to key for direct callers
+    // Brand substitution comes BEFORE user-supplied vars so a translation
+    // can read "Welcome to __BRAND__, {name}" without colliding.
+    if (s.indexOf('__BRAND__') !== -1) {
+        s = s.split('__BRAND__').join(_brandName());
+    }
     if (vars) {
         for (const k of Object.keys(vars)) {
             s = s.split('{' + k + '}').join(vars[k]);
@@ -939,13 +1007,15 @@ window.t = function (key, vars) {
 
 window.applyTranslations = function () {
     const lang = window.getLang();
+    const brand = _brandName();
+    const subBrand = (s) => s.indexOf('__BRAND__') === -1 ? s : s.split('__BRAND__').join(brand);
     document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en';
     document.querySelectorAll('[data-i18n]').forEach((el) => {
         const v = _tOrNull(el.dataset.i18n);
         // If the key isn't in the loaded i18n table (e.g. cached old version),
         // leave the element's existing text — the template default is far
         // less embarrassing than displaying "closet.select_mode" raw.
-        if (v != null) el.textContent = v;
+        if (v != null) el.textContent = subBrand(v);
     });
     document.querySelectorAll('[data-i18n-attr]').forEach((el) => {
         const pairs = el.dataset.i18nAttr.split(',');
@@ -955,7 +1025,7 @@ window.applyTranslations = function () {
             const attr = p.slice(0, idx).trim();
             const key = p.slice(idx + 1).trim();
             const v = _tOrNull(key);
-            if (v != null) el.setAttribute(attr, v);
+            if (v != null) el.setAttribute(attr, subBrand(v));
         }
     });
     // Re-render JS-generated content if a re-render hook exists

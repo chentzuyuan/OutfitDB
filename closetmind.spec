@@ -44,12 +44,33 @@ datas = [
 ]
 
 # ─── 1b. Seed Tester profile (so the .app has a working wardrobe on
-#       first launch — wardrobe.db + items/images + models). The seed
-#       lives outside the project root, so reference by absolute path
-#       and ship it under seed_profiles/Tester inside the bundle.
-TESTER_SRC = os.path.normpath(os.path.join(PROJECT_ROOT, "..", "profiles", "Tester"))
-if os.path.isdir(TESTER_SRC):
-    datas.append((TESTER_SRC, "seed_profiles/Tester"))
+#       first launch — wardrobe.db + items/images + models).
+#
+# Look at two candidate source paths so the same .spec works in two
+# environments without a build-time tweak:
+#
+#   1. PROJECT_ROOT/seed_profiles/Tester   ← canonical committed copy
+#                                            (works on GitHub Actions
+#                                            Windows runner, fresh clones)
+#   2. PROJECT_ROOT/../profiles/Tester     ← dev sibling layout where the
+#                                            real wardrobe lives next to
+#                                            this repo (so my local Mac
+#                                            doesn't need a duplicate).
+#
+# First path that resolves to an actual directory wins. If neither
+# exists the bundle still builds, but seed_default_profile_if_empty()
+# in app/config.py won't have anything to copy on first launch.
+TESTER_CANDIDATES = [
+    os.path.join(PROJECT_ROOT, "seed_profiles", "Tester"),
+    os.path.normpath(os.path.join(PROJECT_ROOT, "..", "profiles", "Tester")),
+]
+for candidate in TESTER_CANDIDATES:
+    if os.path.isdir(candidate) and os.path.isfile(os.path.join(candidate, "wardrobe.db")):
+        datas.append((candidate, "seed_profiles/Tester"))
+        print(f"[spec] Bundling Tester seed from {candidate}")
+        break
+else:
+    print("[spec] WARNING: no Tester seed found at any candidate path")
 
 # ─── 2. Pillow plugins ──────────────────────────────────────────────────
 hiddenimports = collect_submodules("PIL")
@@ -145,12 +166,12 @@ if sys.platform == "darwin":
         name="ClosetMind.app",
         icon=None,        # TODO: add app/static/icons/icon-512.png as .icns
         bundle_identifier="com.closetmind.app",
-        version="0.1.1",
+        version="0.1.2",
         info_plist={
             "CFBundleName": "ClosetMind",
             "CFBundleDisplayName": "ClosetMind",
-            "CFBundleVersion": "0.1.1",
-            "CFBundleShortVersionString": "0.1.1",
+            "CFBundleVersion": "0.1.2",
+            "CFBundleShortVersionString": "0.1.2",
             "NSHighResolutionCapable": True,
             # Don't auto-show the Python window; we use the system browser
             # for the actual UI. The terminal output is for debugging.

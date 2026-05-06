@@ -33,7 +33,7 @@ import urllib.error
 import json
 
 
-APP_VERSION = "0.1.1"
+APP_VERSION = "0.1.2"
 
 # Public URL serving the latest-version manifest. We use a GitHub raw URL
 # pointing at a SEPARATE public releases repo so the source repo stays

@@ -85,6 +85,12 @@ class User(Base):
     # Display preference for temperature: 'C' (default) or 'F'. The DB always
     # stores Celsius — this only affects what the UI shows / accepts as input.
     temp_unit = Column(String(1), default="C", nullable=False)
+
+    # Personal cold-tolerance toggle. When True, the user has reported
+    # they wear thermal insoles / inner layers as standard kit, so the
+    # warmth model assumes slightly more invisible insulation and the
+    # recommendation card stops nagging them to add thermals.
+    has_thermal_insoles = Column(Boolean, default=False, nullable=False)
     # ─── Phase 4: multi-stage training flags ─────────────────────────────
     v2_temp_done = Column(Boolean, default=False, nullable=False)
     v2_aesthetic_done = Column(Boolean, default=False, nullable=False)

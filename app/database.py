@@ -73,6 +73,7 @@ USERS_MIGRATIONS = [
     ("v2_occasion_done", "BOOLEAN DEFAULT 0 NOT NULL"),   # stage 3 finished
     ("zone_warmth_prefs", "TEXT"),                        # JSON dict — adaptive sampling state
     ("temp_unit", "VARCHAR(1) DEFAULT 'C' NOT NULL"),     # 'C' or 'F'; DB still stores Celsius
+    ("has_thermal_insoles", "BOOLEAN DEFAULT 0 NOT NULL"), # personal cold-tolerance bonus
 ]
 RATINGS_MIGRATIONS = [
     ("ideal_temp_zone", "VARCHAR(8)"),

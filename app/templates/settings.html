@@ -55,6 +55,18 @@
 </section>
 
 <section class="panel">
+    <h2 data-i18n="settings.thermal_h2">內搭預設</h2>
+    <p style="color:#666;" data-i18n="settings.thermal_desc">勾起來,代表你平常出門會自動穿一條內搭褲 / 鞋墊 / 內搭衣 — 推薦頁就不會再特別提醒你加內搭。</p>
+    <div class="toolbar" style="margin-top:8px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="hasThermalInsoles" />
+            <span data-i18n="settings.thermal_toggle">我自備內搭 / 鞋墊</span>
+        </label>
+        <span id="thermalStatus" style="color:#888;font-size:0.85rem;margin-left:10px;"></span>
+    </div>
+</section>
+
+<section class="panel">
     <h2 data-i18n="settings.dataDir_h2">資料夾位置</h2>
     <div id="dataDirInfo" style="font-family:monospace;color:#555;">…</div>
 </section>
@@ -75,6 +87,9 @@ async function loadSettings() {
     // Persist into localStorage so other pages (recommendation/training)
     // can render in the chosen unit without an extra round-trip.
     try { localStorage.setItem('cm_temp_unit', unit); } catch (e) {}
+
+    // Thermal-insoles toggle
+    document.getElementById('hasThermalInsoles').checked = !!s.has_thermal_insoles;
 
     const info = document.getElementById('currentInfo');
     if (s.lat != null && s.lon != null) {
@@ -331,6 +346,22 @@ document.querySelectorAll('input[name="tempUnit"]').forEach(r => {
             status.textContent = 'failed';
         }
     });
+});
+
+// Thermal-insoles toggle — same auto-save-on-change pattern as the
+// temp_unit radio. No special UX: just save quietly and show a tick.
+document.getElementById('hasThermalInsoles').addEventListener('change', async (e) => {
+    const status = document.getElementById('thermalStatus');
+    status.textContent = '…';
+    try {
+        await fetch('/users/settings', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ has_thermal_insoles: e.target.checked }),
+        });
+        status.textContent = '✓';
+    } catch (err) {
+        status.textContent = 'failed';
+    }
 });
 
 loadSettings();

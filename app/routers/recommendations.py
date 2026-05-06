@@ -6,7 +6,7 @@ from sqlalchemy import desc
 from .. import crud, models, schemas
 from ..database import get_db
 from ..services.outfit_generator import generate_candidates, persist_candidates
-from ..services.scoring import get_top_k_recommendations
+from ..services.scoring import get_top_k_recommendations, layering_hints
 from .outfits import _outfit_to_out
 
 
@@ -58,9 +58,11 @@ def recommend(payload: schemas.RecommendRequest, db: Session = Depends(get_db)):
     for o, _ in scored:
         crud.increment_coverage_for_outfit(db, o.id)
 
+    has_insoles = bool(getattr(user, "has_thermal_insoles", False))
     return [
         {
             "outfit": _outfit_to_out(o),
+            "layering_hints": layering_hints(o, context, has_thermal_insoles=has_insoles),
             **scores,
         }
         for o, scores in scored

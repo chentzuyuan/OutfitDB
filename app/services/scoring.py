@@ -286,6 +286,58 @@ def score_outfit(
     }
 
 
+def layering_hints(
+    outfit: models.Outfit,
+    context: models.DailyContext,
+    has_thermal_insoles: bool = False,
+) -> List[str]:
+    """Return i18n hint keys nudging the user to add invisible thermal
+    layers (秋褲 / 內搭 / 發熱衣) when the visible outfit is at the cold
+    end of its zone or pairs cold weather with low-insulation fabrics.
+
+    When `has_thermal_insoles` is True the user has self-reported they
+    already wear thermal innerwear as standard kit, so we soften the
+    advice: only the very-cold "subzero" hint fires (and even then it
+    skips the leggings line, since that's already implicit). For users
+    who haven't toggled it on we surface the full set of nudges.
+
+    The scoring model *already* assumes the user has thermal underwear
+    in cold weather (see `_thermal_underlayer_assumption`), but a new
+    user reading the recommendation card has no way to know that —
+    these hints make that assumption visible.
+    """
+    hints: List[str] = []
+    t = context.temperature if context else None
+    if t is None:
+        return hints
+
+    items = [oi.item for oi in (outfit.outfit_items or []) if oi.item is not None]
+
+    has_denim_bottom = any(
+        getattr(it, "category", None) == models.CategoryEnum.bottom
+        and (getattr(it, "material", "") or "").lower() == "denim"
+        for it in items
+    )
+
+    THIN_BASE_MATERIALS = {"cotton", "linen", "rayon", "viscose", "modal"}
+    has_thin_base = any(
+        getattr(it, "category", None) == models.CategoryEnum.top
+        and getattr(it, "thickness", None) == models.ThicknessEnum.thin
+        and (getattr(it, "material", "") or "").lower() in THIN_BASE_MATERIALS
+        and getattr(it, "layer_role", None) != models.LayerRoleEnum.outer
+        for it in items
+    )
+
+    # Order matters: stronger advice trumps softer advice.
+    if t <= 0:
+        hints.append("hint.thermal_strong" if not has_thermal_insoles else "hint.subzero_with_insoles")
+    elif not has_thermal_insoles and t <= 10 and has_denim_bottom:
+        hints.append("hint.thermal_under_denim")
+    elif not has_thermal_insoles and t <= 10 and has_thin_base:
+        hints.append("hint.thermal_thin_base")
+    return hints
+
+
 def get_top_k_recommendations(
     db: Session,
     outfits: List[models.Outfit],

@@ -388,6 +388,19 @@ h2 { margin: 0 0 12px; }
 .rec-card h3 { margin: 0 0 4px; }
 .rec-card .scores { color: #555; font-size: 0.85rem; }
 .rec-card .explain { margin: 8px 0; color: #222; }
+/* Layering hint pill — small yellow note nudging the user to add
+   thermal innerwear when the visible outfit would be borderline cold
+   on its own. Sits between the items and the curves block. */
+.rec-card .rec-hint {
+    margin: 8px 0 4px;
+    padding: 8px 12px;
+    background: #fff8e8;
+    border: 1px solid #f0d590;
+    border-radius: 6px;
+    color: #6b4400;
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
 .rec-card .curves { background: #f6f6f4; padding: 8px; border-radius: 6px; font-family: monospace; font-size: 0.85rem; }
 .mini-grid { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
 .mini { width: 88px; text-align: center; font-size: 0.75rem; }

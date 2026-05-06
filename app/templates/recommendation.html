@@ -220,6 +220,13 @@ function renderRecs(data, ctxId) {
         const explainText = (entry.explanation_codes || [])
             .map(c => t(c.key, c.vars || {}))
             .join(t('expl.sep')) || (entry.explanation || '');
+        // Layering hints (秋褲 / 內搭 / 發熱衣) — only render if the
+        // server attached any. Each hint is an i18n key whose copy lives
+        // in static/js/i18n.js (hint.thermal_strong / thermal_under_denim
+        // / thermal_thin_base / subzero_with_insoles).
+        const hintHtml = (entry.layering_hints || []).length
+            ? `<div class="rec-hint">${(entry.layering_hints || []).map(k => t(k)).join(' · ')}</div>`
+            : '';
         card.innerHTML = `
             <h3>#${idx+1} · ${t('rec.total_score')} ${entry.total_score.toFixed(3)}</h3>
             <div class="scores">
@@ -229,6 +236,7 @@ function renderRecs(data, ctxId) {
             </div>
             <div class="explain">${explainText}</div>
             <div class="mini-grid">${items}</div>
+            ${hintHtml}
             <div class="curves">
                 ${t('rec.curve_coverage')}: ${(o.coverage_curve||[]).map(v=>v.toFixed(1)).join(' / ')}<br/>
                 ${t('rec.curve_aesthetic')}: ${(o.aesthetic_curve||[]).map(v=>v.toFixed(0)).join(' / ')}<br/>

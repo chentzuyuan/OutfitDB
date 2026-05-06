@@ -5,8 +5,8 @@
 > closet — including combinations you'd never have thought of yourself.
 
 [![Try live](https://img.shields.io/badge/Try%20live-closetmind.onrender.com-22c55e?style=for-the-badge)](https://closetmind.onrender.com/)
-[![Download for macOS](https://img.shields.io/badge/macOS-95%20MB-111?style=for-the-badge)](https://github.com/chentzuyuan/ClosetMind/releases/download/v0.1.2/ClosetMind-0.1.2.dmg)
-[![Download for Windows](https://img.shields.io/badge/Windows-210%20MB-0078d4?style=for-the-badge)](https://github.com/chentzuyuan/ClosetMind/releases/download/v0.1.2/ClosetMind-0.1.2-windows.zip)
+[![Download for macOS](https://img.shields.io/badge/macOS-95%20MB-111?style=for-the-badge)](https://github.com/chentzuyuan/ClosetMind/releases/download/v0.1.3/ClosetMind-0.1.3.dmg)
+[![Download for Windows](https://img.shields.io/badge/Windows-210%20MB-0078d4?style=for-the-badge)](https://github.com/chentzuyuan/ClosetMind/releases/download/v0.1.3/ClosetMind-0.1.3-windows.zip)
 [![Landing page](https://img.shields.io/badge/Landing%20page-chentzuyuan.github.io-555?style=for-the-badge)](https://chentzuyuan.github.io/closetmind.html)
 
 The **Try live** button hits the full FastAPI backend on Render's free
@@ -72,8 +72,8 @@ External services (all optional):
 ## Install
 
 For most people the easiest path is the prebuilt desktop bundle —
-[**macOS DMG**](https://github.com/chentzuyuan/ClosetMind/releases/download/v0.1.2/ClosetMind-0.1.2.dmg)
-or [**Windows ZIP**](https://github.com/chentzuyuan/ClosetMind/releases/download/v0.1.2/ClosetMind-0.1.2-windows.zip),
+[**macOS DMG**](https://github.com/chentzuyuan/ClosetMind/releases/download/v0.1.3/ClosetMind-0.1.3.dmg)
+or [**Windows ZIP**](https://github.com/chentzuyuan/ClosetMind/releases/download/v0.1.3/ClosetMind-0.1.3-windows.zip),
 both ship with a *Tester* sample wardrobe so the app is usable on
 first launch without any setup.
 

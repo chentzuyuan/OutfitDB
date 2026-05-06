@@ -1,6 +1,6 @@
-"""ClosetMind desktop launcher.
+"""OutfitDB desktop launcher.
 
-This is the entry point used when ClosetMind is packaged via PyInstaller
+This is the entry point used when OutfitDB is packaged via PyInstaller
 into a double-clickable .app / .exe. It does three things:
 
   1. Find a free TCP port (so two instances on the same machine don't
@@ -21,7 +21,7 @@ Frozen-mode considerations (PyInstaller-specific):
     root and `from app.main import app` works via the normal Python
     package import.
   - When frozen, sys._MEIPASS points at the unpacked bundle dir.
-    PyInstaller's `runtime_hooks` / `datas` config (see closetmind.spec)
+    PyInstaller's `runtime_hooks` / `datas` config (see outfitdb.spec)
     ensures app/static/ and app/templates/ are present at that root,
     so Jinja2 + StaticFiles paths in app/main.py resolve correctly.
 """
@@ -71,11 +71,11 @@ def _wait_for_server(port: int, timeout_s: float = 10.0) -> bool:
 
 def main():
     # Frozen builds don't have a writable cwd by default — make sure
-    # ~/.closetmind/ resolution still works (it's based on Path.home()
+    # ~/.outfitdb/ resolution still works (it's based on Path.home()
     # which is fine in frozen mode).
     port = _find_free_port()
     url = f"http://127.0.0.1:{port}"
-    print(f"[ClosetMind] starting on {url}")
+    print(f"[OutfitDB] starting on {url}")
 
     # Importing here (not at module top) so PyInstaller's static analysis
     # picks up the dependency tree but the import time is amortized into
@@ -101,16 +101,16 @@ def main():
         try:
             webbrowser.open(url)
         except Exception as e:
-            print(f"[ClosetMind] could not auto-open browser: {e}")
-            print(f"[ClosetMind] open manually: {url}")
+            print(f"[OutfitDB] could not auto-open browser: {e}")
+            print(f"[OutfitDB] open manually: {url}")
     else:
-        print(f"[ClosetMind] server didn't start within timeout — open manually: {url}")
+        print(f"[OutfitDB] server didn't start within timeout — open manually: {url}")
 
     # Block on the uvicorn thread. Ctrl+C in the terminal cleanly shuts it down.
     try:
         thread.join()
     except KeyboardInterrupt:
-        print("\n[ClosetMind] shutting down...")
+        print("\n[OutfitDB] shutting down...")
         server.should_exit = True
         thread.join(timeout=3)
 

@@ -23,7 +23,7 @@ if p.get("active") != "Tester":
     print(f"ABORT: active={p.get('active')!r}, expected Tester"); sys.exit(1)
 
 print(f"\n{'='*78}")
-print(f"  ClosetMind demo  ·  Tester profile  ·  50 items, 753 training samples")
+print(f"  OutfitDB demo  ·  Tester profile  ·  50 items, 753 training samples")
 print(f"  Model: XGBoost @ profiles/Tester/models/current.json (Val AUC 0.72)")
 print(f"{'='*78}\n")
 

@@ -19,7 +19,7 @@ def _resolve_db_url() -> str:
     if data_dir is not None:
         return f"sqlite:///{data_dir / 'wardrobe.db'}"
     # Pre-setup fallback: keep importable so /setup page can run
-    return f"sqlite:///{LEGACY_DATA_DIR / 'closetmind.db'}"
+    return f"sqlite:///{LEGACY_DATA_DIR / 'outfitdb.db'}"
 
 
 DATABASE_URL = _resolve_db_url()

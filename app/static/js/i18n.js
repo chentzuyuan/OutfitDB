@@ -1,6 +1,8 @@
-// Minimal client-side i18n for ClosetMind.
+// Minimal client-side i18n for OutfitDB.
 // Strings tagged with data-i18n="key" or data-i18n-attr="attr:key" get translated.
 // JS-generated strings can call window.t('key').
+//
+// localStorage key: od_lang (was cm_lang pre-0.2.0; auto-migrated below).
 
 const TRANSLATIONS = {
     zh: {
@@ -32,7 +34,7 @@ const TRANSLATIONS = {
         'nav.profile_delete_batch_confirm': '確定刪除：{names}？\n資料夾與所有衣物 / 評分 / 模型都會被刪除（不可復原）。',
 
         // ─── Home ───
-        'home.title': 'ClosetMind',
+        'home.title': 'OutfitDB',
         'home.loading': '載入中…',
         'home.checklist_title': '設定進度',
         'home.optional': '（可選）',
@@ -159,7 +161,7 @@ const TRANSLATIONS = {
         'train.aesthetic_label': '美感',
         'train.zone_label': '適合的氣溫',
         'train.done_title': '訓練完成',
-        'train.go_recommend': '開始用 ClosetMind',
+        'train.go_recommend': '開始用 OutfitDB',
 
         // ─── Settings page ───
         'settings.title': '設定',
@@ -427,10 +429,10 @@ const TRANSLATIONS = {
         'train2.occ.start': '開始下一批',
         'train2.occ.submit': '送出這批',
         'train2.occ.q': '這套適合什麼場合？(可多選)',
-        'train2.occ.goto_recommend': '開始用 ClosetMind',
+        'train2.occ.goto_recommend': '開始用 OutfitDB',
 
         // ─── Setup ───
-        'setup.welcome_title': '歡迎使用 ClosetMind',
+        'setup.welcome_title': '歡迎使用 OutfitDB',
         'setup.intro': '建立第一個 Profile — 替你的衣櫃命名。所有資料(衣物、圖片、模型)會存在你電腦的應用資料夾,App 重灌後也不會消失。',
         'setup.profile_name_label': 'Profile 名稱',
         'setup.name_hint': '不可含 / \\ 或以 . 開頭。建議用簡單英文。',
@@ -476,7 +478,7 @@ const TRANSLATIONS = {
         'nav.profile_delete_batch_confirm': 'Delete: {names}?\nFolder + all items / ratings / models will be removed (cannot undo).',
 
         // ─── Home ───
-        'home.title': 'ClosetMind',
+        'home.title': 'OutfitDB',
         'home.loading': 'Loading…',
         'home.checklist_title': 'Setup progress',
         'home.optional': ' (optional)',
@@ -601,7 +603,7 @@ const TRANSLATIONS = {
         'train.aesthetic_label': 'Aesthetic',
         'train.zone_label': 'Best temperature zone',
         'train.done_title': 'Training complete',
-        'train.go_recommend': 'Start using ClosetMind',
+        'train.go_recommend': 'Start using OutfitDB',
 
         // ─── Settings page ───
         'settings.title': 'Settings',
@@ -869,10 +871,10 @@ const TRANSLATIONS = {
         'train2.occ.start': 'Start next batch',
         'train2.occ.submit': 'Submit batch',
         'train2.occ.q': 'Which events suit this outfit? (multi-select)',
-        'train2.occ.goto_recommend': 'Start using ClosetMind',
+        'train2.occ.goto_recommend': 'Start using OutfitDB',
 
         // ─── Setup ───
-        'setup.welcome_title': 'Welcome to ClosetMind',
+        'setup.welcome_title': 'Welcome to OutfitDB',
         'setup.intro': 'Create your first profile — name your closet. All your data (clothes, photos, trained models) lives in your local application data folder and survives app reinstalls.',
         'setup.profile_name_label': 'Profile name',
         'setup.name_hint': 'No / \\ or leading dots. Simple English names work best.',
@@ -891,7 +893,20 @@ const TRANSLATIONS = {
     },
 };
 
-const I18N_KEY = 'cm_lang';
+const I18N_KEY = 'od_lang';
+const LEGACY_I18N_KEY = 'cm_lang';
+
+// One-shot migration: if the user has a pre-0.2.0 cm_lang value, copy it
+// into od_lang so their language pick survives the rename.
+try {
+    const legacy = localStorage.getItem(LEGACY_I18N_KEY);
+    if (legacy != null && localStorage.getItem(I18N_KEY) == null) {
+        localStorage.setItem(I18N_KEY, legacy);
+    }
+    if (legacy != null) {
+        localStorage.removeItem(LEGACY_I18N_KEY);
+    }
+} catch (e) { /* private mode — ignore */ }
 
 window.getLang = function () {
     // Default to English so first-time users see a familiar language;

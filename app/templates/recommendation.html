@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}ClosetMind · 今日推薦{% endblock %}
+{% block title %}OutfitDB · 今日推薦{% endblock %}
 {% block content %}
 <h1 data-i18n="rec.title">今日推薦</h1>
 <div id="trainingGate" class="banner" style="display:none;">
@@ -85,7 +85,7 @@
     <p data-i18n="rec.all_rejected">這批都不喜歡？</p>
     <button class="btn run-big" id="regenerateBtn" data-i18n="rec.regenerate">重新生成</button>
 </div>
-<div id="cmToast" class="cm-toast"></div>
+<div id="odToast" class="od-toast"></div>
 
 <div id="modifyModal" class="modal-overlay" style="display:none;">
     <div class="modal-card">
@@ -123,7 +123,7 @@
 // ─── Toast helper (used for "model updated" notifications) ───
 let _toastTimer = null;
 function showToast(msg, durationMs = 2400) {
-    const t = document.getElementById('cmToast');
+    const t = document.getElementById('odToast');
     if (!t) return;
     t.textContent = msg;
     t.classList.add('show');
@@ -177,11 +177,11 @@ async function autoFillWeatherIfNeeded(body) {
 function fmtCtx(c, weatherInfo) {
     const d = new Date(c.date).toLocaleDateString();
     const parts = [`#${c.id}`, d];
-    if (c.temperature != null) parts.push(window.cm.formatTemp(c.temperature));
+    if (c.temperature != null) parts.push(window.od.formatTemp(c.temperature));
     if (c.temperature_high != null || c.temperature_low != null) {
-        const h = c.temperature_high != null ? window.cm.formatTempInt(c.temperature_high) : '—';
-        const l = c.temperature_low != null ? window.cm.formatTempInt(c.temperature_low) : '—';
-        parts.push(`H${h} / L${l}${window.cm.tempUnitSymbol()}`);
+        const h = c.temperature_high != null ? window.od.formatTempInt(c.temperature_high) : '—';
+        const l = c.temperature_low != null ? window.od.formatTempInt(c.temperature_low) : '—';
+        parts.push(`H${h} / L${l}${window.od.tempUnitSymbol()}`);
     }
     if (c.weather) parts.push(c.weather);
     if (c.occasion) parts.push(c.occasion);
@@ -462,9 +462,9 @@ document.getElementById('ctxForm').addEventListener('submit', async (e) => {
     };
     // Inputs are in user's display unit; convert to Celsius before POST
     // because the DB always stores °C.
-    const temp = fd.get('temperature'); if (temp) body.temperature = window.cm.toCelsius(parseFloat(temp));
-    const th = fd.get('temperature_high'); if (th) body.temperature_high = window.cm.toCelsius(parseFloat(th));
-    const tl = fd.get('temperature_low'); if (tl) body.temperature_low = window.cm.toCelsius(parseFloat(tl));
+    const temp = fd.get('temperature'); if (temp) body.temperature = window.od.toCelsius(parseFloat(temp));
+    const th = fd.get('temperature_high'); if (th) body.temperature_high = window.od.toCelsius(parseFloat(th));
+    const tl = fd.get('temperature_low'); if (tl) body.temperature_low = window.od.toCelsius(parseFloat(tl));
     const w = fd.get('weather'); if (w) body.weather = w;
     const n = fd.get('notes'); if (n) body.notes = n;
     await ensureContextAndRun(body);
@@ -474,7 +474,7 @@ document.getElementById('ctxForm').addEventListener('submit', async (e) => {
 // Replace the "(°C)" suffix in the temperature input label with the user's
 // chosen unit, and re-apply on temp-unit-change events.
 function refreshTempUnitLabels() {
-    const u = window.cm.tempUnitSymbol();  // "°C" or "°F"
+    const u = window.od.tempUnitSymbol();  // "°C" or "°F"
     const el = document.querySelector('label [data-i18n="form.temperature"]');
     if (el) {
         // i18n string is "氣溫 (°C)" / "Temperature (°C)" — strip and re-append
@@ -482,7 +482,7 @@ function refreshTempUnitLabels() {
         el.textContent = `${baseLabel} (${u})`;
     }
 }
-window.addEventListener('cm-temp-unit-change', refreshTempUnitLabels);
+window.addEventListener('od-temp-unit-change', refreshTempUnitLabels);
 // Apply once after i18n has run (slight delay since data-i18n is async-ish)
 setTimeout(refreshTempUnitLabels, 0);
 window.addEventListener('load', refreshTempUnitLabels);

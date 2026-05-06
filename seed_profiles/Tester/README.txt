@@ -1,5 +1,5 @@
-ClosetMind profile folder
-==========================
+OutfitDB profile folder
+=======================
 
 wardrobe.db        — SQLite (items / ratings / outfits / contexts ...)
 items/images/      — clothing photos

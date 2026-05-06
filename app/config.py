@@ -1,9 +1,14 @@
 """Local-first config: profiles auto-discovered from <project>/profiles/.
 Each subfolder of profiles/ that contains an `items/` subdir is a profile.
-Active profile is remembered in ~/.closetmind/active (per-user, per-project).
+Active profile is remembered in ~/.outfitdb/active (per-user, per-project).
 
 This means: zip the whole wardrobe_env/ folder, send to anyone — they unzip,
 run the server, and Bruce + Clark profiles auto-show. No path config needed.
+
+Legacy migration: pre-v0.2.0 builds wrote to ~/.closetmind/ and
+~/Library/Application Support/ClosetMind/. On first launch under the new
+name we silently migrate those to the new locations so existing users
+keep their wardrobe + active-profile pointer without any setup.
 """
 import json
 import os
@@ -29,27 +34,49 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 def _default_profiles_root() -> Path:
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         if sys.platform == "darwin":
-            return Path.home() / "Library" / "Application Support" / "ClosetMind" / "profiles"
+            return Path.home() / "Library" / "Application Support" / "OutfitDB" / "profiles"
         if sys.platform == "win32":
             base = os.getenv("APPDATA") or str(Path.home())
-            return Path(base) / "ClosetMind" / "profiles"
+            return Path(base) / "OutfitDB" / "profiles"
         # Linux / other Unix — XDG Base Directory spec
         xdg = os.getenv("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-        return Path(xdg) / "ClosetMind" / "profiles"
+        return Path(xdg) / "OutfitDB" / "profiles"
     return PROJECT_ROOT / "profiles"
+
+
+def _legacy_profiles_root() -> Optional[Path]:
+    """Pre-v0.2.0 (ClosetMind) frozen-app data location, if it exists."""
+    if not (getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")):
+        return None
+    if sys.platform == "darwin":
+        p = Path.home() / "Library" / "Application Support" / "ClosetMind" / "profiles"
+    elif sys.platform == "win32":
+        base = os.getenv("APPDATA") or str(Path.home())
+        p = Path(base) / "ClosetMind" / "profiles"
+    else:
+        xdg = os.getenv("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+        p = Path(xdg) / "ClosetMind" / "profiles"
+    return p if p.exists() else None
 
 
 DEFAULT_PROFILES_ROOT = _default_profiles_root()
 
-# Override via env var (e.g., for cloud deployment / testing)
-PROFILES_ROOT = Path(os.getenv("CLOSETMIND_PROFILES_ROOT") or DEFAULT_PROFILES_ROOT).resolve()
+# Override via env var (e.g., for cloud deployment / testing).
+# Prefer OUTFITDB_PROFILES_ROOT; fall back to legacy CLOSETMIND_PROFILES_ROOT
+# so existing Render deploys keep working until they redeploy.
+PROFILES_ROOT = Path(
+    os.getenv("OUTFITDB_PROFILES_ROOT")
+    or os.getenv("CLOSETMIND_PROFILES_ROOT")
+    or DEFAULT_PROFILES_ROOT
+).resolve()
 
 # Per-user state (which profile is active). Not part of project.
-USER_STATE_DIR = Path.home() / ".closetmind"
+USER_STATE_DIR = Path.home() / ".outfitdb"
 ACTIVE_FILE = USER_STATE_DIR / "active"
 
-# Legacy formats — migrated on first run
-LEGACY_CONFIG_FILE = USER_STATE_DIR / "config.json"
+# Pre-v0.2.0 (ClosetMind) per-user state — used only for one-time migration.
+LEGACY_USER_STATE_DIR = Path.home() / ".closetmind"
+LEGACY_CONFIG_FILE = LEGACY_USER_STATE_DIR / "config.json"
 
 
 def _ensure_dirs():
@@ -57,7 +84,51 @@ def _ensure_dirs():
     USER_STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 
-RENDER_MODE = bool(os.getenv("CLOSETMIND_RENDER_MODE"))
+def _migrate_user_state_dir():
+    """Move ~/.closetmind/active → ~/.outfitdb/active on first launch under the
+    new name. Idempotent — only runs if the old dir exists and the new one
+    doesn't already have an active file. Safe to call on every startup."""
+    if not LEGACY_USER_STATE_DIR.exists():
+        return
+    USER_STATE_DIR.mkdir(parents=True, exist_ok=True)
+    legacy_active = LEGACY_USER_STATE_DIR / "active"
+    if legacy_active.exists() and not ACTIVE_FILE.exists():
+        try:
+            shutil.copy2(legacy_active, ACTIVE_FILE)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[config] migrate active pointer failed: {exc}")
+
+
+def _migrate_frozen_app_data():
+    """Copy ~/Library/Application Support/ClosetMind/profiles → .../OutfitDB/profiles
+    if the legacy dir exists and the new one is empty. Frozen-app only."""
+    legacy = _legacy_profiles_root()
+    if legacy is None:
+        return
+    new = DEFAULT_PROFILES_ROOT
+    new.mkdir(parents=True, exist_ok=True)
+    # Only migrate if new is empty (no profile dirs yet)
+    has_existing = any(c.is_dir() for c in new.iterdir()) if new.exists() else False
+    if has_existing:
+        return
+    try:
+        for child in legacy.iterdir():
+            if child.is_dir():
+                target = new / child.name
+                if not target.exists():
+                    shutil.copytree(child, target)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[config] migrate frozen-app data failed: {exc}")
+
+
+# Run migrations once at import time. Idempotent — noop on every subsequent run.
+_migrate_user_state_dir()
+_migrate_frozen_app_data()
+
+
+# Honour both the new and legacy env-var names so existing Render configs
+# keep working through the rename.
+RENDER_MODE = bool(os.getenv("OUTFITDB_RENDER_MODE") or os.getenv("CLOSETMIND_RENDER_MODE"))
 
 
 def _locate_tester_seed() -> Optional[Path]:
@@ -201,8 +272,8 @@ def ensure_data_dir_structure(data_dir: Path) -> None:
     readme = data_dir / "README.txt"
     if not readme.exists():
         readme.write_text(
-            "ClosetMind profile folder\n"
-            "==========================\n\n"
+            "OutfitDB profile folder\n"
+            "=======================\n\n"
             "wardrobe.db        — SQLite (items / ratings / outfits / contexts ...)\n"
             "items/images/      — clothing photos\n"
             "models/current.json — XGBoost preference model\n"
@@ -240,7 +311,7 @@ def reset_active() -> None:
 
 def migrate_legacy_config() -> None:
     """Old format: ~/.closetmind/config.json with absolute data_dirs.
-    New format: profiles/* folders + ~/.closetmind/active.
+    New format: profiles/* folders + ~/.outfitdb/active.
     Idempotent: safe to call repeatedly. Migrates folders into profiles/, then
     backs up the legacy config so we don't redo this.
     """

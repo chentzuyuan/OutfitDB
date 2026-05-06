@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate placeholder JPG images for ClosetMind Tester wardrobe slots 22-40.
+"""Generate placeholder JPG images for OutfitDB Tester wardrobe slots 22-40.
 
 Each placeholder is a 1024x1024 color-coded card with the item name and
 a stylized garment glyph indicating the category. The PIL output mirrors

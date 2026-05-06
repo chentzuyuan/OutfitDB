@@ -1,6 +1,6 @@
 {
-  "name": "ClosetMind",
-  "short_name": "ClosetMind",
+  "name": "OutfitDB",
+  "short_name": "OutfitDB",
   "description": "本地優先的穿搭排程系統",
   "start_url": "/",
   "scope": "/",

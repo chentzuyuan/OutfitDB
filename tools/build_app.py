@@ -1,4 +1,4 @@
-"""One-shot ClosetMind desktop bundler.
+"""One-shot OutfitDB desktop bundler.
 
 Usage:
     .venv/bin/python -m tools.build_app
@@ -6,7 +6,7 @@ Usage:
 Steps:
   1. Verify pyinstaller is installed; pip install if missing.
   2. Wipe previous dist/ and build/ directories.
-  3. Invoke pyinstaller with closetmind.spec.
+  3. Invoke pyinstaller with outfitdb.spec.
   4. Print where the .app / executable landed.
 
 Design choices:
@@ -27,7 +27,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-SPEC_FILE = PROJECT_ROOT / "closetmind.spec"
+SPEC_FILE = PROJECT_ROOT / "outfitdb.spec"
 DIST_DIR = PROJECT_ROOT / "dist"
 BUILD_DIR = PROJECT_ROOT / "build"
 
@@ -58,16 +58,16 @@ def _run_pyinstaller() -> None:
 
 def _report() -> None:
     if sys.platform == "darwin":
-        app = DIST_DIR / "ClosetMind.app"
+        app = DIST_DIR / "OutfitDB.app"
         if app.exists():
             print(f"\n✓ Built: {app}")
             print(f"  Test with:  open '{app}'")
-            print(f"  Or:         '{app}/Contents/MacOS/ClosetMind'  (to see logs)")
+            print(f"  Or:         '{app}/Contents/MacOS/OutfitDB'  (to see logs)")
             return
-    folder = DIST_DIR / "ClosetMind"
+    folder = DIST_DIR / "OutfitDB"
     if folder.exists():
         ext = ".exe" if sys.platform == "win32" else ""
-        print(f"\n✓ Built: {folder}/ClosetMind{ext}")
+        print(f"\n✓ Built: {folder}/OutfitDB{ext}")
     else:
         print(f"\n✗ Expected output not found in {DIST_DIR}")
 

@@ -36,12 +36,14 @@ if not (getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Migrate legacy ~/.closetmind/config.json → profiles/ folder layout (idempotent)
+    # Migrate legacy ~/.closetmind/config.json → profiles/ folder layout (idempotent;
+    # the legacy ~/.closetmind dir is also auto-mirrored into ~/.outfitdb when
+    # app.config is imported, so users upgrading from <0.2.0 keep their data).
     config.migrate_legacy_config()
     # First-run convenience: when the .app or the Render container ship a
     # bundled Tester profile, copy it into PROFILES_ROOT so the app is
     # immediately playable. On Render this also force-activates Tester
-    # (seed_default_profile_if_empty consults CLOSETMIND_RENDER_MODE)
+    # (seed_default_profile_if_empty consults OUTFITDB_RENDER_MODE)
     # so visitors land directly on the demo wardrobe without going
     # through /setup.
     seeded = config.seed_default_profile_if_empty()
@@ -67,7 +69,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="ClosetMind", lifespan=lifespan)
+app = FastAPI(title="OutfitDB", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 

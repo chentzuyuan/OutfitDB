@@ -29,6 +29,8 @@ Output:
 
 Run from project root:
   cd closetmind && .venv/bin/python -m tools.training.window_sweep
+   (project dir name kept as `closetmind/` for repo path stability;
+    user-visible naming is OutfitDB.)
 """
 from __future__ import annotations
 import json
@@ -272,7 +274,7 @@ def make_plot(summary: dict) -> None:
     ax2.grid(alpha=0.3)
 
     fig.suptitle(
-        f"ClosetMind Phase 4 — why we cap training at the most recent N "
+        f"OutfitDB Phase 4 — why we cap training at the most recent N "
         f"(user_id=1, {summary['total_ratings_loaded']} ratings, "
         f"fixed val={summary['holdout_size']})",
         fontsize=11, y=1.02,

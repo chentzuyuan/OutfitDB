@@ -1,4 +1,4 @@
-# ClosetMind 插圖需求清單
+# OutfitDB 插圖需求清單
 
 App 走「無 emoji」風格，以下是 UI 上原本想用 emoji 但需要實際插圖的位置。建議用一致的 **單色線條 / minimal flat / monochrome** 風格保持視覺乾淨。
 

@@ -1,4 +1,4 @@
-"""ClosetMind version + auto-update check.
+"""OutfitDB version + auto-update check.
 
 Single source of truth for the application version, plus a cached remote
 check against a publicly-readable JSON manifest. The manifest is
@@ -8,14 +8,14 @@ so we can ship versions without exposing code.
 Manifest format (latest.json on the public URL):
     {
         "version": "0.2.0",
-        "url": "https://example.com/closetmind-0.2.0.dmg",
+        "url": "https://example.com/outfitdb-0.2.0.dmg",
         "notes": "Adds X / fixes Y"
     }
 
 The `/version` endpoint returns:
     {
-        "current": "0.1.0",
-        "latest": "0.2.0" | null,
+        "current": "0.2.0",
+        "latest": "0.3.0" | null,
         "update_available": true | false,
         "url": "...",
         "notes": "..."
@@ -33,18 +33,23 @@ import urllib.error
 import json
 
 
-APP_VERSION = "0.1.3"
+APP_VERSION = "0.2.0"
 
 # Public URL serving the latest-version manifest. We use a GitHub raw URL
 # pointing at a SEPARATE public releases repo so the source repo stays
 # private. Owner is responsible for maintaining this manifest.
 #
-# Override with the CLOSETMIND_UPDATE_FEED env var if you want to point
-# at a different feed (useful for testing or alternative distribution).
+# Override with the OUTFITDB_UPDATE_FEED env var if you want to point at
+# a different feed (useful for testing or alternative distribution).
+# CLOSETMIND_UPDATE_FEED kept as a fallback so older custom-feed setups
+# don't silently break across the rename.
 import os
 UPDATE_FEED_URL = os.environ.get(
-    "CLOSETMIND_UPDATE_FEED",
-    "https://raw.githubusercontent.com/buttegg/closetmind-releases/main/latest.json",
+    "OUTFITDB_UPDATE_FEED",
+    os.environ.get(
+        "CLOSETMIND_UPDATE_FEED",
+        "https://raw.githubusercontent.com/buttegg/outfitdb-releases/main/latest.json",
+    ),
 )
 
 # Cache the remote check for 6 hours so we don't pound the GitHub raw
@@ -78,7 +83,7 @@ def _fetch_remote() -> Optional[dict]:
     try:
         req = urllib.request.Request(
             UPDATE_FEED_URL,
-            headers={"User-Agent": f"ClosetMind/{APP_VERSION}"},
+            headers={"User-Agent": f"OutfitDB/{APP_VERSION}"},
         )
         with urllib.request.urlopen(req, timeout=3.0) as resp:
             if resp.status != 200:

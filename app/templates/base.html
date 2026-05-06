@@ -3,19 +3,19 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>{% block title %}ClosetMind{% endblock %}</title>
+    <title>{% block title %}OutfitDB{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/app.css" />
     <link rel="manifest" href="/static/manifest.json" />
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon-180.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="ClosetMind" />
+    <meta name="apple-mobile-web-app-title" content="OutfitDB" />
     <meta name="theme-color" content="#111111" />
     <script src="/static/js/i18n.js"></script>
     <script src="/static/js/temp_unit.js"></script>
 </head>
 <body>
     <header class="topbar">
-        <a class="brand" href="/">ClosetMind</a>
+        <a class="brand" href="/">OutfitDB</a>
         <nav>
             <a href="/recommend" data-i18n="nav.recommend">穿搭推薦</a>
             <a href="/upload" data-i18n="nav.upload">上傳衣物</a>
@@ -75,8 +75,8 @@
     <main class="container">
         {% block content %}{% endblock %}
     </main>
-    <footer class="cm-footer">
-        <span>ClosetMind <span id="appVersion">v0.1.0</span></span>
+    <footer class="od-footer">
+        <span>OutfitDB <span id="appVersion">v0.2.0</span></span>
         <span id="updateBanner" style="display:none;">
             ·
             <a id="updateLink" href="#" target="_blank" rel="noopener"

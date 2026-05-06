@@ -4,9 +4,13 @@ Behavior (per user instruction): keep demo items + images, drop ratings / outfit
 outfit_logs / contexts / item_states / item_stats / model_runs, delete the trained model.
 The fresh wardrobe.db will only contain: users, items (and item images).
 
+Note: this is a one-time pre-Phase-3 migration helper, kept for reference.
+The legacy DB it migrates *from* was historically named closetmind.db, hence
+the file lookup below — that's the real filename on disk, not branding.
+
 Usage:
-    .venv/bin/python -m tools.migrate_to_local_first --target ~/MyClosetMind
-    .venv/bin/python -m tools.migrate_to_local_first --target ~/MyClosetMind --reset
+    .venv/bin/python -m tools.migrate_to_local_first --target ~/MyOutfitDB
+    .venv/bin/python -m tools.migrate_to_local_first --target ~/MyOutfitDB --reset
 """
 import argparse
 import shutil
@@ -40,7 +44,7 @@ def fetch_legacy_items(legacy_db_path: Path) -> List[dict]:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--target", required=True, help="目標母資料夾，例如 ~/MyClosetMind")
+    parser.add_argument("--target", required=True, help="目標母資料夾，例如 ~/MyOutfitDB")
     parser.add_argument("--reset", action="store_true",
                         help="若 wardrobe.db 已存在則先刪掉重建")
     args = parser.parse_args()

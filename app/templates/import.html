@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}ClosetMind · Bulk Import{% endblock %}
+{% block title %}OutfitDB · Bulk Import{% endblock %}
 {% block content %}
 <h1 data-i18n="import.title">CSV 批次匯入</h1>
 
@@ -104,7 +104,7 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'closetmind_template.csv';
+    a.download = 'outfitdb_template.csv';
     a.click();
     URL.revokeObjectURL(url);
 });
@@ -115,7 +115,7 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
 // automatically (no need to remember to sync two strings).
 const HEADER_LINE = TEMPLATE.split('\n')[0];
 
-const AI_PROMPT = `I need you to help me build a wardrobe CSV file for ClosetMind. Ask me
+const AI_PROMPT = `I need you to help me build a wardrobe CSV file for OutfitDB. Ask me
 questions about each clothing item, then output ONE clean CSV.
 
 DO NOT:

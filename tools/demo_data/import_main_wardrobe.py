@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bulk-import 40 wardrobe items into the active ClosetMind profile (Tester).
+"""Bulk-import 40 wardrobe items into the active OutfitDB profile (Tester).
 
 Reads /tmp/wardrobe_spec.json, then for each slot uploads the matching
 JPG from profiles/Tester/items/images/{slot}.jpg via POST /items/upload

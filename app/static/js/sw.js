@@ -1,11 +1,15 @@
-// ClosetMind service worker.
+// OutfitDB service worker.
 // Strategy: stale-while-revalidate for static, network-first for HTML, no cache for APIs.
 // EXCEPTION: i18n.js + temp_unit.js are network-first because new translation
 // keys / temperature helpers ship as data inside the JS file — using a stale
 // cached copy would surface raw "closet.foo_bar" keys in the UI when the page
 // references a key that only exists in the newer file. Worth the small
 // perf cost on cold load.
-const VERSION = 'cm-v30';
+//
+// Bumping the cache key to od-v1 (was cm-v30) on the OutfitDB rename forces
+// every existing client to drop the old cache on first load — this is what
+// purges the cached "ClosetMind" branding from PWA-installed instances.
+const VERSION = 'od-v1';
 const SHELL = [
     '/',
     '/static/css/app.css',

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}ClosetMind · 設定{% endblock %}
+{% block title %}OutfitDB · 設定{% endblock %}
 {% block content %}
 <h1 data-i18n="settings.title">設定</h1>
 
@@ -86,7 +86,7 @@ async function loadSettings() {
     if (r) r.checked = true;
     // Persist into localStorage so other pages (recommendation/training)
     // can render in the chosen unit without an extra round-trip.
-    try { localStorage.setItem('cm_temp_unit', unit); } catch (e) {}
+    try { localStorage.setItem('od_temp_unit', unit); } catch (e) {}
 
     // Thermal-insoles toggle
     document.getElementById('hasThermalInsoles').checked = !!s.has_thermal_insoles;
@@ -338,9 +338,11 @@ document.querySelectorAll('input[name="tempUnit"]').forEach(r => {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ temp_unit: unit }),
             });
-            try { localStorage.setItem('cm_temp_unit', unit); } catch (e) {}
+            try { localStorage.setItem('od_temp_unit', unit); } catch (e) {}
             status.textContent = '✓';
             // Notify other open pages so their displays update without reload
+            window.dispatchEvent(new CustomEvent('od-temp-unit-change', { detail: unit }));
+            // Legacy event name kept for any pre-0.2.0 listeners:
             window.dispatchEvent(new CustomEvent('cm-temp-unit-change', { detail: unit }));
         } catch (err) {
             status.textContent = 'failed';

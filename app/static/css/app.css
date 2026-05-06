@@ -440,7 +440,7 @@ h2 { margin: 0 0 12px; }
 }
 
 /* Toast for model-updated notification after rejection */
-.cm-toast {
+.od-toast {
     position: fixed; bottom: 24px; left: 50%;
     transform: translateX(-50%) translateY(80px);
     background: #2c3e50; color: #fff;
@@ -449,7 +449,7 @@ h2 { margin: 0 0 12px; }
     opacity: 0; transition: opacity 0.25s, transform 0.25s;
     z-index: 9999; pointer-events: none;
 }
-.cm-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.od-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* Reject hint banner at top of recommend page */
 .rec-reject-hint {
@@ -841,7 +841,7 @@ fieldset.cat-fields legend { padding: 0 6px; color: #555; font-size: 0.9rem; }
 }
 
 /* ─── Version footer (desktop app build) ────────────────────────────── */
-.cm-footer {
+.od-footer {
     text-align: center;
     color: #aaa;
     font-size: 0.78rem;
@@ -849,5 +849,5 @@ fieldset.cat-fields legend { padding: 0 6px; color: #555; font-size: 0.9rem; }
     border-top: 1px solid #eee;
     margin-top: 40px;
 }
-.cm-footer a { color: #b85a3a; text-decoration: none; }
-.cm-footer a:hover { text-decoration: underline; }
+.od-footer a { color: #b85a3a; text-decoration: none; }
+.od-footer a:hover { text-decoration: underline; }

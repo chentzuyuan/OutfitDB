@@ -1,10 +1,10 @@
-"""Wrap the built ClosetMind.app in a macOS .dmg installer.
+"""Wrap the built OutfitDB.app in a macOS .dmg installer.
 
-Usage (run AFTER tools/build_app.py has produced dist/ClosetMind.app):
+Usage (run AFTER tools/build_app.py has produced dist/OutfitDB.app):
     .venv/bin/python -m tools.make_dmg
 
 Output:
-    dist/ClosetMind-{version}.dmg
+    dist/OutfitDB-{version}.dmg
 
 Why DMG over a plain .zip:
   - macOS users recognize the "drag-to-Applications" pattern instantly.
@@ -33,7 +33,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DIST = PROJECT_ROOT / "dist"
-APP = DIST / "ClosetMind.app"
+APP = DIST / "OutfitDB.app"
 STAGING = DIST / "_dmg_staging"
 
 
@@ -56,11 +56,11 @@ def main() -> None:
         sys.exit(1)
 
     version = _read_version()
-    dmg_name = f"ClosetMind-{version}.dmg"
+    dmg_name = f"OutfitDB-{version}.dmg"
     dmg_path = DIST / dmg_name
 
     # Build a staging directory containing exactly:
-    #   ClosetMind.app    — the actual application
+    #   OutfitDB.app    — the actual application
     #   Applications      — symlink to /Applications, so the user sees
     #                        an Applications folder icon and drags the
     #                        .app onto it.
@@ -70,7 +70,7 @@ def main() -> None:
     STAGING.mkdir(parents=True)
     # copytree with symlinks=True preserves the .app's internal symlinks
     # (PyInstaller bundles contain links into Python.framework/Versions/)
-    shutil.copytree(APP, STAGING / "ClosetMind.app", symlinks=True)
+    shutil.copytree(APP, STAGING / "OutfitDB.app", symlinks=True)
     (STAGING / "Applications").symlink_to("/Applications")
 
     # Replace any old DMG so hdiutil doesn't refuse to overwrite.
@@ -89,7 +89,7 @@ def main() -> None:
     print(f"[make_dmg] creating {dmg_path}")
     subprocess.check_call([
         "hdiutil", "create",
-        "-volname", "ClosetMind",
+        "-volname", "OutfitDB",
         "-srcfolder", str(STAGING),
         "-ov", "-format", "ULFO", "-fs", "HFS+",
         str(dmg_path),

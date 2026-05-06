@@ -1,13 +1,13 @@
-# ClosetMind
+# OutfitDB
 
 > A local-first wardrobe app that learns *your* sense of temperature, *your*
 > aesthetic, and *your* sense of occasion. Suggests outfits from your own
 > closet — including combinations you'd never have thought of yourself.
 
-[![Try live](https://img.shields.io/badge/Try%20live-closetmind.onrender.com-22c55e?style=for-the-badge)](https://closetmind.onrender.com/)
-[![Download for macOS](https://img.shields.io/badge/macOS-95%20MB-111?style=for-the-badge)](https://github.com/chentzuyuan/ClosetMind/releases/download/v0.1.3/ClosetMind-0.1.3.dmg)
-[![Download for Windows](https://img.shields.io/badge/Windows-210%20MB-0078d4?style=for-the-badge)](https://github.com/chentzuyuan/ClosetMind/releases/download/v0.1.3/ClosetMind-0.1.3-windows.zip)
-[![Landing page](https://img.shields.io/badge/Landing%20page-chentzuyuan.github.io-555?style=for-the-badge)](https://chentzuyuan.github.io/closetmind.html)
+[![Try live](https://img.shields.io/badge/Try%20live-outfitdb.onrender.com-22c55e?style=for-the-badge)](https://outfitdb.onrender.com/)
+[![Download for macOS](https://img.shields.io/badge/macOS-95%20MB-111?style=for-the-badge)](https://github.com/chentzuyuan/OutfitDB/releases/download/v0.2.0/OutfitDB-0.2.0.dmg)
+[![Download for Windows](https://img.shields.io/badge/Windows-210%20MB-0078d4?style=for-the-badge)](https://github.com/chentzuyuan/OutfitDB/releases/download/v0.2.0/OutfitDB-0.2.0-windows.zip)
+[![Landing page](https://img.shields.io/badge/Landing%20page-chentzuyuan.github.io-555?style=for-the-badge)](https://chentzuyuan.github.io/outfitdb.html)
 
 The **Try live** button hits the full FastAPI backend on Render's free
 tier, pre-seeded with the *Tester* sample wardrobe so you can click
@@ -20,9 +20,16 @@ The macOS / Windows desktop builds ship the same Tester profile bundled
 inside the binary, so the local app is also usable on first launch
 without uploading anything.
 
+> **0.2.0 rename note.** OutfitDB was previously called **ClosetMind**.
+> The desktop builds auto-migrate any wardrobe data left over from the
+> old name (`~/Library/Application Support/ClosetMind/` on macOS,
+> `%APPDATA%\ClosetMind\` on Windows, plus the `~/.closetmind/` active
+> profile pointer) into the OutfitDB locations on first launch. No
+> manual export / import needed.
+
 ## Why this exists
 
-ClosetMind is the first of a planned series of small desktop apps that
+OutfitDB is the first of a planned series of small desktop apps that
 demonstrate how **anyone can build their own database and train their own
 ML model for everyday problems that don't have a tidy mathematical
 answer**. "What should I wear today?" combines temperature, aesthetic,
@@ -72,8 +79,8 @@ External services (all optional):
 ## Install
 
 For most people the easiest path is the prebuilt desktop bundle —
-[**macOS DMG**](https://github.com/chentzuyuan/ClosetMind/releases/download/v0.1.3/ClosetMind-0.1.3.dmg)
-or [**Windows ZIP**](https://github.com/chentzuyuan/ClosetMind/releases/download/v0.1.3/ClosetMind-0.1.3-windows.zip),
+[**macOS DMG**](https://github.com/chentzuyuan/OutfitDB/releases/download/v0.2.0/OutfitDB-0.2.0.dmg)
+or [**Windows ZIP**](https://github.com/chentzuyuan/OutfitDB/releases/download/v0.2.0/OutfitDB-0.2.0-windows.zip),
 both ship with a *Tester* sample wardrobe so the app is usable on
 first launch without any setup.
 
@@ -81,8 +88,8 @@ To run from source instead:
 
 ```bash
 # 1. Get the code
-git clone https://github.com/chentzuyuan/ClosetMind.git
-cd ClosetMind
+git clone https://github.com/chentzuyuan/OutfitDB.git
+cd OutfitDB
 
 # 2. Create a fresh virtualenv
 python3.12 -m venv .venv
@@ -98,7 +105,7 @@ uvicorn app.main:app --reload
 
 Then open **http://127.0.0.1:8000** in your browser. First-run will
 redirect to `/setup` — either accept the default data folder
-(`~/MyClosetMind/`) and create your own profile, or click
+(`~/MyOutfitDB/`) and create your own profile, or click
 **"Try the sample wardrobe (Tester)"** to start with the bundled
 54-item closet. Tester is also seeded automatically into the data
 folder if you launch from the prebuilt `.app` / `.exe`, so you can
@@ -109,7 +116,7 @@ swap into it from the top-right profile switcher any time.
 ## First-time walkthrough (5 min)
 
 1. **Setup screen** — accept default data folder; the app creates
-   `~/MyClosetMind/{wardrobe.db, items/images/, models/, calendar/}`
+   `~/MyOutfitDB/{wardrobe.db, items/images/, models/, calendar/}`
 2. **Upload clothes** at `/upload` — drag-drop up to 20 items at once,
    each row gets category / color / material / thickness selectors
 3. **Train temperature** at `/training/temperature` — for each shown outfit,
@@ -136,12 +143,12 @@ gets copied into your data folder automatically:
 
 - **Prebuilt `.app` / `.exe`**: bundled inside the binary; the app
   copies it on first launch into the OS-standard data directory
-  (`~/Library/Application Support/ClosetMind/profiles/Tester` on
-  macOS, `%APPDATA%\ClosetMind\profiles\Tester` on Windows).
-- **Render demo**: copied into `/tmp/closetmind/profiles/Tester` on
+  (`~/Library/Application Support/OutfitDB/profiles/Tester` on
+  macOS, `%APPDATA%\OutfitDB\profiles\Tester` on Windows).
+- **Render demo**: copied into `/tmp/outfitdb/profiles/Tester` on
   every cold start, so each visitor gets a fresh wardrobe.
 - **Run from source**: copy `seed_profiles/Tester/` into your
-  `~/MyClosetMind/Tester/` (or the data directory you picked at
+  `~/MyOutfitDB/Tester/` (or the data directory you picked at
   `/setup`) before first launch — the app picks it up automatically.
 
 If you want to *generate* the Tester wardrobe from scratch (e.g., to
@@ -155,7 +162,7 @@ DB, and `make_*.py` produces Pillow placeholder photos.
 ## Project layout
 
 ```
-closetmind/
+outfitdb/
 ├── README.md                    ← this file
 ├── requirements.txt             ← pip dependencies
 ├── render.yaml                  ← optional Render.com deploy config
@@ -193,7 +200,7 @@ closetmind/
 │   └── static/                  ← CSS / JS / icons / service worker
 │
 ├── docs/
-│   └── ClosetMind_Documentation.docx  ← 50-page architecture & ML doc
+│   └── OutfitDB_Documentation.docx  ← architecture & ML doc
 │
 ├── seeder/                      ← legacy demo seeder (Phase 1 era)
 │
@@ -217,7 +224,7 @@ closetmind/
         └── add_phase4_doc_chapter.py
 ```
 
-User data lives in a separate folder (default `~/MyClosetMind/`). It is
+User data lives in a separate folder (default `~/MyOutfitDB/`). It is
 **never** placed inside this code repo — the local-first architecture is
 deliberate so you can move / sync / back up your wardrobe independently of
 the application.
@@ -261,15 +268,15 @@ together into a final score. New training data flows into the appropriate
 stage's table (`temperature_ratings`, `ratings`, `occasion_ratings`) and
 auto-retrains its model in the background.
 
-For the deep version, see **`docs/ClosetMind_Documentation.docx`** (19
-chapters covering schema, ML pipeline, scoring math, frontend walkthrough,
-and Phase 4 multi-stage training architecture).
+For the deep version, see **`docs/OutfitDB_Documentation.docx`** (architecture,
+schema, ML pipeline, scoring math, frontend walkthrough, and Phase 4
+multi-stage training architecture).
 
 ---
 
 ## License & data privacy
 
 - All wardrobe data, photos, and trained models live exclusively in your
-  user folder (`~/MyClosetMind/` by default). Nothing is uploaded.
+  user folder (`~/MyOutfitDB/` by default). Nothing is uploaded.
 - The browser's Open-Meteo weather call uses your own IP, not the server's.
 - No telemetry, no analytics, no third-party scripts in the served HTML.

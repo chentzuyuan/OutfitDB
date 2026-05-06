@@ -4,7 +4,7 @@ name: build-windows
 # runner. Two trigger modes:
 #   - workflow_dispatch  → manual button on the Actions tab (great for the
 #     first proof-of-life build before we wire up tag-based releases).
-#   - push: tags v*      → push a tag like v0.1.0-win and the workflow
+#   - push: tags v*      → push a tag like v0.2.0 and the workflow
 #     attaches the resulting zip to the matching GitHub Release.
 on:
   workflow_dispatch:
@@ -37,11 +37,11 @@ jobs:
           pip install "pyinstaller>=6.0"
 
       - name: Build frozen .exe with PyInstaller
-        # closetmind.spec already has Windows-aware bundling: the
+        # outfitdb.spec already has Windows-aware bundling: the
         # `if sys.platform == "darwin": app = BUNDLE(...)` block is
         # skipped here, so PyInstaller just produces the COLLECT folder
-        # at dist/ClosetMind/ with ClosetMind.exe inside.
-        run: pyinstaller closetmind.spec --noconfirm
+        # at dist/OutfitDB/ with OutfitDB.exe inside.
+        run: pyinstaller outfitdb.spec --noconfirm
 
       - name: Inspect dist/ contents (debugging aid)
         shell: pwsh
@@ -55,7 +55,7 @@ jobs:
         # echo it into a step output so subsequent steps can reference
         # ${{ steps.appver.outputs.version }} when shaping the asset
         # name. This keeps the Windows ZIP filename in lock-step with
-        # the macOS DMG (ClosetMind-0.1.0.dmg / ClosetMind-0.1.0-windows.zip).
+        # the macOS DMG (OutfitDB-0.2.0.dmg / OutfitDB-0.2.0-windows.zip).
         run: |
           $line = (Select-String -Path app/version.py -Pattern '^APP_VERSION').Line
           $version = ($line -split '=')[1].Trim().Trim("'").Trim('"')
@@ -65,21 +65,21 @@ jobs:
       - name: Zip the bundle
         shell: pwsh
         run: |
-          $zip = "dist/ClosetMind-${{ steps.appver.outputs.version }}-windows.zip"
-          Compress-Archive -Path dist/ClosetMind/* -DestinationPath $zip -Force
+          $zip = "dist/OutfitDB-${{ steps.appver.outputs.version }}-windows.zip"
+          Compress-Archive -Path dist/OutfitDB/* -DestinationPath $zip -Force
           Write-Host "Built $zip ($((Get-Item $zip).Length / 1MB) MB)"
 
       - name: Upload Actions artifact (always — even on workflow_dispatch)
         uses: actions/upload-artifact@v4
         with:
-          name: ClosetMind-${{ steps.appver.outputs.version }}-windows
-          path: dist/ClosetMind-${{ steps.appver.outputs.version }}-windows.zip
+          name: OutfitDB-${{ steps.appver.outputs.version }}-windows
+          path: dist/OutfitDB-${{ steps.appver.outputs.version }}-windows.zip
           retention-days: 30
 
       - name: Attach to GitHub Release (only when triggered by a tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/ClosetMind-${{ steps.appver.outputs.version }}-windows.zip
+          files: dist/OutfitDB-${{ steps.appver.outputs.version }}-windows.zip
           fail_on_unmatched_files: true
           generate_release_notes: true

@@ -1,13 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec for ClosetMind desktop bundle.
+PyInstaller spec for OutfitDB desktop bundle.
 
 Build with:
-    pyinstaller closetmind.spec --noconfirm
+    pyinstaller outfitdb.spec --noconfirm
 
 Produces:
-    dist/ClosetMind.app   (macOS)
-    dist/ClosetMind/      (Linux/Windows folder bundle)
+    dist/OutfitDB.app   (macOS)
+    dist/OutfitDB/      (Linux/Windows folder bundle)
 
 Three known PyInstaller-with-FastAPI-stack gotchas pre-handled here:
 
@@ -134,7 +134,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="ClosetMind",
+    name="OutfitDB",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -156,22 +156,22 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="ClosetMind",
+    name="OutfitDB",
 )
 
 # macOS .app bundle wrapper
 if sys.platform == "darwin":
     app = BUNDLE(
         coll,
-        name="ClosetMind.app",
+        name="OutfitDB.app",
         icon=None,        # TODO: add app/static/icons/icon-512.png as .icns
-        bundle_identifier="com.closetmind.app",
-        version="0.1.3",
+        bundle_identifier="com.outfitdb.app",
+        version="0.2.0",
         info_plist={
-            "CFBundleName": "ClosetMind",
-            "CFBundleDisplayName": "ClosetMind",
-            "CFBundleVersion": "0.1.3",
-            "CFBundleShortVersionString": "0.1.3",
+            "CFBundleName": "OutfitDB",
+            "CFBundleDisplayName": "OutfitDB",
+            "CFBundleVersion": "0.2.0",
+            "CFBundleShortVersionString": "0.2.0",
             "NSHighResolutionCapable": True,
             # Don't auto-show the Python window; we use the system browser
             # for the actual UI. The terminal output is for debugging.

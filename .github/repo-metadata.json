@@ -1,9 +1,10 @@
 {
-  "description": "Try live: closetmind.onrender.com — Local-first wardrobe app that learns your sense of temperature, aesthetic, and occasion, then suggests outfits from your own closet (incl. combos you'd never have tried). Three-stage XGBoost + 11-table SQLite, no cloud, no account.",
-  "homepage": "https://closetmind.onrender.com/",
+  "description": "Try live: outfitdb.onrender.com — Local-first wardrobe app (formerly ClosetMind) that learns your sense of temperature, aesthetic, and occasion, then suggests outfits from your own closet (incl. combos you'd never have tried). Three-stage XGBoost + 11-table SQLite, no cloud, no account.",
+  "homepage": "https://outfitdb.onrender.com/",
   "topics": [
     "wardrobe",
     "outfit-recommendation",
+    "outfitdb",
     "machine-learning",
     "xgboost",
     "fastapi",

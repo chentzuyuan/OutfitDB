@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}ClosetMind · Temperature Training{% endblock %}
+{% block title %}OutfitDB · Temperature Training{% endblock %}
 {% block content %}
 <h1 data-i18n="train2.temp.title">溫度訓練</h1>
 
@@ -30,7 +30,7 @@
 <script>
 // Each zone carries both °C and °F range strings so we can honour the
 // user's temp_unit preference (set on /settings, persisted in
-// localStorage as cm_temp_unit). The °F bands are exact conversions of
+// localStorage as od_temp_unit). The °F bands are exact conversions of
 // the °C boundaries (32 / 50 / 64.4 / 77 / 86 °F), rounded to whole
 // degrees for readability — same width as the corresponding C zone, so
 // classification semantics don't change.
@@ -44,11 +44,11 @@ const ZONES = [
 ];
 
 function zoneRange(z) {
-    // temp_unit.js exposes window.cm.tempUnit() — returns 'F' or 'C'.
+    // temp_unit.js exposes window.od.tempUnit() — returns 'F' or 'C'.
     // Falsy if the script hasn't loaded yet (shouldn't happen in
     // practice; base.html includes it before this template) — default
     // to °C so we don't blank out the label.
-    const u = (window.cm && window.cm.tempUnit) ? window.cm.tempUnit() : 'C';
+    const u = (window.od && window.od.tempUnit) ? window.od.tempUnit() : 'C';
     return u === 'F' ? z.range_f : z.range_c;
 }
 
@@ -58,12 +58,12 @@ function zoneLabel(z) {
 }
 
 // First-visit race condition fix:
-// temp_unit.js bootstraps the localStorage cm_temp_unit by async-
+// temp_unit.js bootstraps the localStorage od_temp_unit by async-
 // fetching /users/settings on page load, then dispatches
-// 'cm-temp-unit-change' on window when it actually had to switch
+// 'od-temp-unit-change' on window when it actually had to switch
 // (e.g., user record says 'F' but localStorage was empty). If our
 // progress + buttons already rendered with °C, we redo them now.
-window.addEventListener('cm-temp-unit-change', () => {
+window.addEventListener('od-temp-unit-change', () => {
     refreshProgress();
     if (currentBatch) renderBatch();
     // Re-render the target-zone header too, if a batch is mid-flight.

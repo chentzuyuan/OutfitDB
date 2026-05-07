@@ -3,7 +3,11 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>{% block title %}{{ brand.app_name }}{% endblock %}</title>
+    {# `title_key` is the i18n key i18n.js looks up on language change to
+       refresh the browser tab name. Pages set both blocks; if title_key
+       is empty (server-only mode) the data attribute stays empty and
+       applyTranslations leaves the server-rendered text alone. #}
+    <title data-i18n-title="{% block title_key %}{% endblock %}">{% block title %}{{ brand.app_name }}{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/app.css" />
     <link rel="manifest" href="/static/manifest.json" />
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon-180.png" />

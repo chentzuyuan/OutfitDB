@@ -37,6 +37,19 @@ const TRANSLATIONS = {
         'nav.profile_delete_batch': '刪除選取的 {n} 個',
         'nav.profile_delete_batch_confirm': '確定刪除：{names}？\n資料夾與所有衣物 / 評分 / 模型都會被刪除（不可復原）。',
 
+        // ─── Browser tab titles (read by i18n.js + applied to document.title) ───
+        'page.title.home':           '__BRAND__',
+        'page.title.recommend':      '__BRAND__ · 今日推薦',
+        'page.title.upload':         '__BRAND__ · 上傳衣物',
+        'page.title.import':         '__BRAND__ · 批次匯入',
+        'page.title.closet':         '__BRAND__ · 衣櫥',
+        'page.title.training':       '__BRAND__ · 評分訓練',
+        'page.title.training_temp':  '__BRAND__ · 溫度訓練',
+        'page.title.training_aes':   '__BRAND__ · 美感訓練',
+        'page.title.training_occ':   '__BRAND__ · 場合訓練',
+        'page.title.settings':       '__BRAND__ · 設定',
+        'page.title.setup':          '__BRAND__ · 初始設定',
+
         // ─── Home ───
         'home.title': '__BRAND__',
         'home.loading': '載入中…',
@@ -501,6 +514,19 @@ const TRANSLATIONS = {
         'nav.profile_done': 'Done',
         'nav.profile_delete_batch': 'Delete {n} selected',
         'nav.profile_delete_batch_confirm': 'Delete: {names}?\nFolder + all items / ratings / models will be removed (cannot undo).',
+
+        // ─── Browser tab titles (read by i18n.js + applied to document.title) ───
+        'page.title.home':           '__BRAND__',
+        'page.title.recommend':      '__BRAND__ · Today\'s recommendation',
+        'page.title.upload':         '__BRAND__ · Upload',
+        'page.title.import':         '__BRAND__ · Bulk Import',
+        'page.title.closet':         '__BRAND__ · Closet',
+        'page.title.training':       '__BRAND__ · Training',
+        'page.title.training_temp':  '__BRAND__ · Temperature Training',
+        'page.title.training_aes':   '__BRAND__ · Aesthetic Training',
+        'page.title.training_occ':   '__BRAND__ · Occasion Training',
+        'page.title.settings':       '__BRAND__ · Settings',
+        'page.title.setup':          '__BRAND__ · Setup',
 
         // ─── Home ───
         'home.title': '__BRAND__',
@@ -1028,6 +1054,18 @@ window.applyTranslations = function () {
             if (v != null) el.setAttribute(attr, subBrand(v));
         }
     });
+    // Browser tab title — the <title> element in base.html carries
+    // data-i18n-title="page.title.<page>"; we write through document.title
+    // because some browsers don't reflect <title>.textContent updates
+    // until the next event-loop turn.
+    const titleEl = document.querySelector('title[data-i18n-title]');
+    if (titleEl) {
+        const key = titleEl.dataset.i18nTitle;
+        if (key) {
+            const v = _tOrNull(key);
+            if (v != null) document.title = subBrand(v);
+        }
+    }
     // Re-render JS-generated content if a re-render hook exists
     if (typeof window.onLanguageChange === 'function') {
         try { window.onLanguageChange(lang); } catch (e) { console.warn(e); }

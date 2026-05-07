@@ -5,8 +5,8 @@
 > closet — including combinations you'd never have thought of yourself.
 
 [![Try live](https://img.shields.io/badge/Try%20live-outfitdb.onrender.com-22c55e?style=for-the-badge)](https://outfitdb.onrender.com/)
-[![Download for macOS](https://img.shields.io/badge/macOS-95%20MB-111?style=for-the-badge)](https://github.com/chentzuyuan/OutfitDB/releases/download/v0.2.0/OutfitDB-0.2.0.dmg)
-[![Download for Windows](https://img.shields.io/badge/Windows-210%20MB-0078d4?style=for-the-badge)](https://github.com/chentzuyuan/OutfitDB/releases/download/v0.2.0/OutfitDB-0.2.0-windows.zip)
+[![Download for macOS](https://img.shields.io/badge/macOS-100%20MB-111?style=for-the-badge)](https://github.com/chentzuyuan/OutfitDB/releases/download/v0.3.0/OutfitDB-0.3.0.dmg)
+[![Download for Windows](https://img.shields.io/badge/Windows-249%20MB-0078d4?style=for-the-badge)](https://github.com/chentzuyuan/OutfitDB/releases/download/v0.3.0/OutfitDB-0.3.0-windows.zip)
 [![Landing page](https://img.shields.io/badge/Landing%20page-chentzuyuan.github.io-555?style=for-the-badge)](https://chentzuyuan.github.io/outfitdb.html)
 
 The **Try live** button hits the full FastAPI backend on Render's free
@@ -79,8 +79,8 @@ External services (all optional):
 ## Install
 
 For most people the easiest path is the prebuilt desktop bundle —
-[**macOS DMG**](https://github.com/chentzuyuan/OutfitDB/releases/download/v0.2.0/OutfitDB-0.2.0.dmg)
-or [**Windows ZIP**](https://github.com/chentzuyuan/OutfitDB/releases/download/v0.2.0/OutfitDB-0.2.0-windows.zip),
+[**macOS DMG**](https://github.com/chentzuyuan/OutfitDB/releases/download/v0.3.0/OutfitDB-0.3.0.dmg)
+or [**Windows ZIP**](https://github.com/chentzuyuan/OutfitDB/releases/download/v0.3.0/OutfitDB-0.3.0-windows.zip),
 both ship with a *Tester* sample wardrobe so the app is usable on
 first launch without any setup.
 

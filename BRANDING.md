@@ -52,10 +52,10 @@ These get the new name automatically on the next operation listed:
 
 A handful of identifiers are intentionally left as static strings:
 
-- **Repo directory name on disk** (`wardrobe_env/closetmind/`). Renaming
-  the dir would invalidate every absolute path that anyone has stored
-  (git remotes, local bookmarks, Render's clone URL). The user-facing
-  brand can drift away from the repo dir name without harm.
+- **Repo directory name on disk** (`wardrobe_env/closetapp/`).
+  Deliberately brand-neutral so future renames don't require shuffling
+  the on-disk dir + rebuilding venv each time. The user-facing brand
+  is allowed to drift away from the repo dir name.
 - **CSS class prefixes** (`.od-toast`, `.od-footer`, `.od-hero`,
   etc.). These aren't user-visible. Renaming them across CSS + every
   template that references them is busy-work for zero user benefit.

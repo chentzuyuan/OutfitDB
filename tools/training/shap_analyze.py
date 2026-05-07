@@ -14,7 +14,7 @@ import numpy as np
 import xgboost as xgb
 import shap
 
-CM_ROOT = Path("/Users/buttegg/School_Projects/wardrobe_env/closetmind")
+CM_ROOT = Path("/Users/buttegg/School_Projects/wardrobe_env/closetapp")
 sys.path.insert(0, str(CM_ROOT.parent))
 sys.path.insert(0, str(CM_ROOT))
 

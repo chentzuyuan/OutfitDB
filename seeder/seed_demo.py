@@ -1,7 +1,7 @@
 """Demo seeder — English wardrobe + 20 items covering thin→very_thick range.
 
 Usage:
-    cd /Users/buttegg/School_Projects/wardrobe_env/closetmind
+    cd /Users/buttegg/School_Projects/wardrobe_env/closetapp
     .venv/bin/python -m seeder.seed_demo                      # add to current active profile
     .venv/bin/python -m seeder.seed_demo --reset              # wipe items/outfits/etc first
     .venv/bin/python -m seeder.seed_demo --reset --skip-ratings  # no synthetic ratings

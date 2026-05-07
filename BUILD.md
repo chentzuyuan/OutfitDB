@@ -9,10 +9,11 @@ the same UI you see during development, but bundled.
 This document covers how to produce that bundle.
 
 > **Pre-0.2.0 history.** OutfitDB was previously called *ClosetMind*.
-> The on-disk repo path is still `wardrobe_env/closetmind/` for git
-> history stability, and a few internal references (legacy migration
-> paths, file names like `closetmind-releases`) remain on the old name
-> for back-compat. User-facing branding is OutfitDB everywhere.
+> The on-disk repo dir is `wardrobe_env/closetapp/` — kept brand-
+> neutral so future renames don't require shuffling the dir + rebuilding
+> venv. A few internal references (legacy migration paths, file names
+> like `closetmind-releases`) remain on the old name for back-compat.
+> User-facing branding is OutfitDB everywhere.
 
 ## Quick start
 

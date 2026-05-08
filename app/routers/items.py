@@ -1,8 +1,11 @@
 import json
 import time
+from collections import Counter
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from PIL import Image
 
@@ -510,3 +513,113 @@ def hard_delete(item_id: int, db: Session = Depends(get_db)):
 
     image_removed = _delete_image_file(image_path)
     return {"ok": True, "image_removed": image_removed}
+
+
+# ─────────────────────────────────────────────────────────────────────
+# /items/{id}/stats — feeds the per-item stats modal in the closet view.
+# Returns: headline KPIs, 90-day wear timeline (weekly buckets),
+# top co-occurring items, composition breakdown.
+# ─────────────────────────────────────────────────────────────────────
+@router.get("/{item_id}/stats")
+def item_stats(item_id: int, db: Session = Depends(get_db)):
+    item = crud.get_item(db, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="item not found")
+
+    state = item.state
+    stats = item.stats
+
+    # ── 1. Headline KPIs ────────────────────────────────────────────
+    headline = {
+        "name": item.name,
+        "category": item.category.value if item.category else None,
+        "image_path": item.image_path,
+        "state": state.state.value if state and state.state else None,
+        "worn_count": int(state.worn_count) if state and state.worn_count is not None else 0,
+        "wear_count_since_wash": int(state.wear_count_since_wash) if state and state.wear_count_since_wash is not None else 0,
+        "last_worn": state.last_worn.isoformat() if state and state.last_worn else None,
+        "coverage_count": int(stats.coverage_count) if stats and stats.coverage_count is not None else 0,
+        "total_ratings": int(stats.total_ratings) if stats and stats.total_ratings is not None else 0,
+        "average_rating": float(stats.average_rating) if stats and stats.average_rating is not None else None,
+        "days_since_worn": int(stats.days_since_worn) if stats and stats.days_since_worn is not None else None,
+    }
+
+    # ── 2. Wear timeline — weekly buckets over the last 90 days ────
+    # Wear events live in outfit_logs (final_worn_outfit_id IS NOT NULL).
+    # We pull every wear event referencing an outfit that contains this item.
+    cutoff = datetime.utcnow() - timedelta(days=90)
+    log_rows = (
+        db.query(models.OutfitLog.scheduled_for)
+        .join(models.Outfit, models.Outfit.id == models.OutfitLog.final_worn_outfit_id)
+        .join(models.OutfitItem, models.OutfitItem.outfit_id == models.Outfit.id)
+        .filter(
+            models.OutfitItem.item_id == item_id,
+            models.OutfitLog.final_worn_outfit_id.isnot(None),
+            models.OutfitLog.scheduled_for >= cutoff,
+        )
+        .all()
+    )
+    # Bucket by ISO week (last 13 weeks ≈ 90 days)
+    week_buckets = {}
+    for (scheduled_for,) in log_rows:
+        if scheduled_for is None:
+            continue
+        # Use Monday of that week as the bucket key
+        d = scheduled_for.date()
+        monday = d - timedelta(days=d.weekday())
+        week_buckets[monday] = week_buckets.get(monday, 0) + 1
+
+    # Generate 13 contiguous weeks ending at this week's Monday
+    today = datetime.utcnow().date()
+    this_monday = today - timedelta(days=today.weekday())
+    timeline_labels = []
+    timeline_values = []
+    for i in range(12, -1, -1):
+        wk = this_monday - timedelta(weeks=i)
+        timeline_labels.append(wk.isoformat())
+        timeline_values.append(int(week_buckets.get(wk, 0)))
+    timeline = {"labels": timeline_labels, "values": timeline_values}
+
+    # ── 3. Co-occurrence — top items most often paired in outfits ──
+    # Find every outfit containing this item, then count the OTHER items in those outfits
+    paired_outfit_ids = (
+        db.query(models.OutfitItem.outfit_id)
+        .filter(models.OutfitItem.item_id == item_id)
+        .subquery()
+    )
+    co_rows = (
+        db.query(models.Item.id, models.Item.name, func.count(models.OutfitItem.id))
+        .join(models.OutfitItem, models.OutfitItem.item_id == models.Item.id)
+        .filter(
+            models.OutfitItem.outfit_id.in_(paired_outfit_ids),
+            models.OutfitItem.item_id != item_id,
+        )
+        .group_by(models.Item.id, models.Item.name)
+        .order_by(func.count(models.OutfitItem.id).desc())
+        .limit(5)
+        .all()
+    )
+    co_occurrence = {
+        "labels": [name for _, name, _ in co_rows],
+        "values": [int(c) for _, _, c in co_rows],
+    }
+
+    # ── 4. Composition breakdown (if available) ────────────────────
+    composition_chart = None
+    if item.composition:
+        try:
+            comp = item.composition if isinstance(item.composition, list) else json.loads(item.composition)
+            if comp and isinstance(comp, list):
+                composition_chart = {
+                    "labels": [c.get("material", "?") for c in comp],
+                    "values": [float(c.get("pct", 0)) for c in comp],
+                }
+        except Exception:
+            composition_chart = None
+
+    return {
+        "headline": headline,
+        "timeline": timeline,
+        "co_occurrence": co_occurrence,
+        "composition": composition_chart,
+    }

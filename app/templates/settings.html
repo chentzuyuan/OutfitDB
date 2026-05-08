@@ -98,6 +98,22 @@
         </div>
     </div>
 </section>
+
+<!-- ─── Manual update check ─────────────────────────────────────────── -->
+<!-- We deliberately don't auto-check: the page-load fetch was removed so the
+     remote manifest only gets hit when the user clicks the button. The
+     server still caches the result for 6 hours regardless. -->
+<section class="panel update-panel">
+    <h3 data-i18n="settings.update.title">應用程式更新</h3>
+    <div class="muted">
+        <span data-i18n="settings.update.current">目前版本</span>:
+        <strong>v{{ app.version }}</strong>
+    </div>
+    <div style="margin-top:10px;">
+        <button class="btn" id="checkUpdateBtn" data-i18n="settings.update.check_btn">檢查更新</button>
+    </div>
+    <div id="updateResult" class="update-result"></div>
+</section>
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/weather.js"></script>
@@ -512,5 +528,71 @@ document.getElementById('styleImportBtn').addEventListener('click', async () => 
 loadSettings();
 loadStyleImports();
 window.onLanguageChange = () => { loadSettings(); loadStyleImports(); };
+
+// ─── Manual update check ─────────────────────────────────────────────
+// Hits /version on click; the result is cached server-side for 6 hours
+// (see app/version.py) so a frantic clicker can't DDoS GitHub raw.
+document.getElementById('checkUpdateBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('checkUpdateBtn');
+    const out = document.getElementById('updateResult');
+    btn.disabled = true;
+    out.style.display = 'block';
+    out.className = 'update-result';
+    out.textContent = (window.getLang && window.getLang() === 'en')
+        ? 'Checking…' : '檢查中…';
+
+    try {
+        const r = await fetch('/version');
+        const v = await r.json();
+        const isEN = window.getLang && window.getLang() === 'en';
+
+        if (v.latest === null) {
+            out.classList.add('is-error');
+            out.textContent = isEN
+                ? 'Could not reach update server (offline or feed unavailable).'
+                : '無法連到更新伺服器(離線或服務暫不可用)';
+        } else if (!v.update_available) {
+            out.classList.add('is-current');
+            out.textContent = isEN
+                ? `You are on the latest version (v${v.current}).`
+                : `已是最新版 (v${v.current})`;
+        } else {
+            // New version available — surface BOTH update + full URLs as buttons
+            out.classList.add('is-new');
+            const lines = [
+                isEN
+                    ? `Update available: v${v.latest}` + (v.notes ? ` — ${v.notes}` : '')
+                    : `有新版可下載: v${v.latest}` + (v.notes ? ` — ${v.notes}` : ''),
+            ];
+            out.innerHTML = lines.join('<br>');
+            const linkRow = document.createElement('div');
+            linkRow.className = 'update-links';
+            const incUrl  = v.update_url || v.url;
+            const fullUrl = v.full_url   || v.url;
+            if (incUrl) {
+                const a = document.createElement('a');
+                a.href = incUrl; a.target = '_blank'; a.rel = 'noopener';
+                a.textContent = isEN ? 'Download update' : '下載更新檔';
+                linkRow.appendChild(a);
+            }
+            // Show full installer button only when distinct from incremental
+            if (fullUrl && fullUrl !== incUrl) {
+                const a = document.createElement('a');
+                a.href = fullUrl; a.target = '_blank'; a.rel = 'noopener';
+                a.className = 'secondary';
+                a.textContent = isEN ? 'Download full installer' : '下載完整版';
+                linkRow.appendChild(a);
+            }
+            out.appendChild(linkRow);
+        }
+    } catch (e) {
+        out.classList.add('is-error');
+        out.textContent = (window.getLang && window.getLang() === 'en')
+            ? 'Update check failed. Please try again later.'
+            : '更新檢查失敗,請稍後再試';
+    } finally {
+        btn.disabled = false;
+    }
+});
 </script>
 {% endblock %}

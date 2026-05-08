@@ -11,16 +11,24 @@ all read from app/branding.py — renaming the app is a one-file edit.
 Manifest format (latest.json on the public URL):
     {
         "version": "0.3.0",
-        "url": "https://example.com/MyApp-0.3.0.dmg",
+        "url": "https://example.com/MyApp-0.3.0.dmg",      # legacy single
+        "update_url": "https://.../OutfitDB-0.3.0-update.zip",  # incremental
+        "full_url":   "https://.../OutfitDB-0.3.0-full.dmg",    # full installer
         "notes": "Adds X / fixes Y"
     }
+
+`update_url` and `full_url` are optional — if either is missing we fall
+back to the legacy `url`. The UI surfaces both when present so the user
+can pick a smaller incremental download or a fresh full installer.
 
 The `/version` endpoint returns:
     {
         "current": "0.3.0",
         "latest": "0.4.0" | null,
         "update_available": true | false,
-        "url": "...",
+        "url": "...",         # always populated if any of the three is set
+        "update_url": "..." | null,
+        "full_url":   "..." | null,
         "notes": "..."
     }
 
@@ -38,7 +46,7 @@ import json
 from . import branding
 
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 
 # Public URL serving the latest-version manifest. We use a GitHub raw URL
 # pointing at a SEPARATE public releases repo so the source repo stays
@@ -94,6 +102,24 @@ def _fetch_remote() -> Optional[dict]:
         return None
 
 
+def is_web_demo() -> bool:
+    """True when the app is running as the public web demo (Render etc.).
+    The desktop app — packaged with PyInstaller — sets sys.frozen, so the
+    inverse check is a reliable web detector. Operators can also force
+    demo mode via the OUTFITDB_WEB_DEMO env var (e.g. for staging hosts).
+    """
+    import os, sys
+    if os.environ.get("OUTFITDB_WEB_DEMO", "").strip() in ("1", "true", "yes"):
+        return True
+    # PyInstaller-bundled apps set sys.frozen — anything else (including
+    # uvicorn on Render) counts as web.
+    return not getattr(sys, "frozen", False)
+
+
+# Backwards-compat private alias — used inside this module.
+_is_web_demo = is_web_demo
+
+
 def get_version_status() -> dict:
     """Return the current version + cached remote-check result.
 
@@ -101,16 +127,22 @@ def get_version_status() -> dict:
         {"current": "0.1.0",
          "latest": "0.2.0" | None,
          "update_available": bool,
-         "url": str | None,
+         "is_web_demo": bool,
+         "url": str | None,         # legacy / fallback installer URL
+         "update_url": str | None,  # smaller, incremental update package
+         "full_url":   str | None,  # complete installer
          "notes": str | None}
 
     The remote check is cached for _CHECK_TTL_SECONDS, so calling this
     on every page load is cheap.
     """
     now = time.time()
+    web_demo = _is_web_demo()
     with _cache_lock:
         if _cache["result"] is not None and (now - _cache["checked_at"]) < _CHECK_TTL_SECONDS:
-            return dict(_cache["result"])  # defensive copy
+            cached = dict(_cache["result"])  # defensive copy
+            cached["is_web_demo"] = web_demo  # may have toggled at runtime
+            return cached
 
     remote = _fetch_remote()
     if remote is None:
@@ -118,16 +150,25 @@ def get_version_status() -> dict:
             "current": APP_VERSION,
             "latest": None,
             "update_available": False,
+            "is_web_demo": web_demo,
             "url": None,
+            "update_url": None,
+            "full_url": None,
             "notes": None,
         }
     else:
         latest = remote.get("version")
+        url        = remote.get("url")
+        update_url = remote.get("update_url") or url
+        full_url   = remote.get("full_url")   or url
         result = {
             "current": APP_VERSION,
             "latest": latest,
             "update_available": _is_newer(latest, APP_VERSION),
-            "url": remote.get("url"),
+            "is_web_demo": web_demo,
+            "url": url,
+            "update_url": update_url,
+            "full_url": full_url,
             "notes": remote.get("notes"),
         }
 

@@ -36,6 +36,7 @@
                     <a href="/training/temperature" data-i18n="nav.train_temp">溫度訓練</a>
                     <a href="/training/aesthetic"   data-i18n="nav.train_aes">美感訓練</a>
                     <a href="/training/occasion"    data-i18n="nav.train_occ">場合訓練</a>
+                    <a href="/stats"   data-i18n="nav.stats">衣櫃統計</a>
                     <a href="/import" data-i18n="nav.import">批次匯入</a>
                     <a href="/settings" data-i18n="nav.settings">設定</a>
                 </div>
@@ -83,34 +84,21 @@
     <main class="container">
         {% block content %}{% endblock %}
     </main>
+    {% if app.is_web_demo %}
+    <!-- Trial banner — pinned to the top of every page when the app is running
+         as the public web demo (Render). Hidden in the desktop bundle. The
+         download URL points to the GitHub releases page; users click manually. -->
+    <div class="trial-banner">
+        <span data-i18n="banner.web_demo">這是線上試用版,完整功能請下載桌面 App</span>
+        <a href="https://github.com/chentzuyuan/OutfitDB/releases" target="_blank" rel="noopener" class="trial-cta"
+           data-i18n="banner.download_full">下載完整版 →</a>
+    </div>
+    {% endif %}
+
     <footer class="od-footer">
-        <span>{{ brand.app_name }} <span id="appVersion">v0.3.0</span></span>
-        <span id="updateBanner" style="display:none;">
-            ·
-            <a id="updateLink" href="#" target="_blank" rel="noopener"
-               data-i18n="footer.update_available">有新版可下載 →</a>
-        </span>
+        <span>{{ brand.app_name }} v{{ app.version }}</span>
+        <!-- Manual update check lives on the settings page (no auto-fetch on page load). -->
     </footer>
-    <script>
-        // Surface the running app version + nudge user when a newer
-        // build exists. /version is cached server-side for 6 hours so
-        // calling this on every page load is cheap.
-        (function () {
-            fetch('/version').then(r => r.json()).then(v => {
-                const el = document.getElementById('appVersion');
-                if (el && v.current) el.textContent = 'v' + v.current;
-                if (v.update_available && v.url) {
-                    const banner = document.getElementById('updateBanner');
-                    const link = document.getElementById('updateLink');
-                    if (banner && link) {
-                        link.href = v.url;
-                        if (v.notes) link.title = v.notes;
-                        banner.style.display = '';
-                    }
-                }
-            }).catch(() => { /* offline / endpoint missing — silent */ });
-        })();
-    </script>
     <script src="/static/js/app.js"></script>
     <script>
         document.getElementById('langToggle').addEventListener('click', () => window.toggleLang());

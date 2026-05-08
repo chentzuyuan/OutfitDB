@@ -28,6 +28,19 @@
                 <option value="home" data-i18n="enum.occasion.home">home 在家</option>
             </select>
         </label>
+        <!-- Sort key — re-orders the recommendation cards in place after they
+             arrive from the server. The server still ranks by total_score
+             (multiplicative); these alternatives just surface ONE axis as
+             primary so the user can see which outfits each model favors. -->
+        <label class="topk-box">
+            <span data-i18n="rec.sort_label">排序</span>
+            <select id="sortMode">
+                <option value="total"     data-i18n="rec.sort.total">綜合排序</option>
+                <option value="weather"   data-i18n="rec.sort.weather">天氣優先</option>
+                <option value="aesthetic" data-i18n="rec.sort.aesthetic">美觀度優先</option>
+                <option value="occasion"  data-i18n="rec.sort.occasion">場合合適度</option>
+            </select>
+        </label>
     </div>
     <div class="ctx-summary" id="ctxInfo" style="margin-top:12px;color:#555;font-size:0.92rem;"></div>
     <details id="forceDetails" style="margin-top:14px;" open>
@@ -201,15 +214,36 @@ function checkAllRejected() {
 
 let lastCtxId = null;
 
+// Cache the most recent recommendations so the sort dropdown can re-sort
+// without re-hitting the server (server scoring is fixed; only display order changes).
+let _lastRecs = [];
+
+// Map sort-mode key → comparator. Each pulls the relevant axis off the entry
+// and sorts descending. The server's own ranking (multiplicative `total_score`)
+// remains the default; these alternatives just surface ONE axis as primary.
+const SORT_MODES = {
+    total:     (e) => e.total_score          ?? 0,
+    weather:   (e) => e.stage1_temp_pass     ?? 0,
+    aesthetic: (e) => e.preference_score     ?? 0,
+    occasion:  (e) => e.stage3_occasion_pass ?? 0,
+};
+
 function renderRecs(data, ctxId) {
     lastCtxId = ctxId;
+    _lastRecs = data || [];
     const recs = document.getElementById('recs');
     document.getElementById('regenerate').style.display = 'none';
     // Show the "click dislike to penalize" hint banner once there are recs
     const hint = document.getElementById('rejectHint');
     if (hint) hint.style.display = data && data.length ? '' : 'none';
     recs.innerHTML = '';
-    for (const [idx, entry] of data.entries()) {
+
+    // Apply current sort mode (re-orders without changing #1, #2, … numbering scheme)
+    const mode = document.getElementById('sortMode')?.value || 'total';
+    const keyFn = SORT_MODES[mode] || SORT_MODES.total;
+    const sortedData = [...data].sort((a, b) => keyFn(b) - keyFn(a));
+
+    for (const [idx, entry] of sortedData.entries()) {
         const o = entry.outfit;
         const items = o.outfit_items.map(oi => {
             const it = oi.item;
@@ -229,11 +263,15 @@ function renderRecs(data, ctxId) {
             ? `<div class="rec-hint">${(entry.layering_hints || []).map(k => t(k)).join(' · ')}</div>`
             : '';
         card.innerHTML = `
-            <h3>#${idx+1} · ${t('rec.total_score')} ${entry.total_score.toFixed(3)}</h3>
+            <h3>#${idx+1}</h3>
             <div class="scores">
-                pref ${entry.preference_score.toFixed(2)} · ctx ${entry.context_fit_score.toFixed(2)} ·
-                fresh ${entry.freshness_score.toFixed(2)} · div ${entry.diversity_score.toFixed(2)} ·
-                rec ${entry.recovery_score.toFixed(2)}
+                <b>${t('rec.score.aesthetic')}</b> ${entry.preference_score.toFixed(2)} ·
+                <b>${t('rec.score.weather')}</b> ${(entry.stage1_temp_pass ?? 1).toFixed(2)} ·
+                <b>${t('rec.score.occasion')}</b> ${(entry.stage3_occasion_pass ?? 1).toFixed(2)}
+                <br/>
+                <span class="scores-soft">${t('rec.score.warmth')} ${entry.context_fit_score.toFixed(2)} ·
+                ${t('rec.score.fresh')} ${entry.freshness_score.toFixed(2)} ·
+                ${t('rec.score.variety')} ${entry.diversity_score.toFixed(2)}</span>
             </div>
             <div class="explain">${explainText}</div>
             <div class="mini-grid">${items}</div>
@@ -448,6 +486,12 @@ document.getElementById('forceClear').addEventListener('click', () => {
 renderForceGrid();
 
 document.getElementById('runBtn').addEventListener('click', () => ensureContextAndRun(null));
+
+// Re-sort in place when the user picks a different sort mode. We don't
+// re-call the server — same data, just a different ordering.
+document.getElementById('sortMode').addEventListener('change', () => {
+    if (_lastRecs.length) renderRecs(_lastRecs, lastCtxId);
+});
 
 document.getElementById('regenerateBtn').addEventListener('click', () => {
     document.getElementById('regenerate').style.display = 'none';

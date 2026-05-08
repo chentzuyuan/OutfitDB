@@ -26,6 +26,15 @@
         <option value="in_laundry" data-i18n="closet.state_dirty">in_laundry (待洗)</option>
         <option value="unavailable" data-i18n="closet.state_unavailable">unavailable</option>
     </select>
+    <!-- Sort key — re-orders the grid in place, doesn't re-fetch from the server. -->
+    <select id="sortMode">
+        <option value="recent"    data-i18n="closet.sort.recent">最近新增</option>
+        <option value="name"      data-i18n="closet.sort.name">名稱 A→Z</option>
+        <option value="worn_desc" data-i18n="closet.sort.worn_desc">最常穿</option>
+        <option value="worn_asc"  data-i18n="closet.sort.worn_asc">最少穿</option>
+        <option value="rating"    data-i18n="closet.sort.rating">最高評分</option>
+        <option value="coverage"  data-i18n="closet.sort.coverage">最常被推薦</option>
+    </select>
     <button class="btn" id="refreshBtn" data-i18n="closet.refresh">重新整理</button>
     <button class="btn secondary" id="laundryBtn" data-i18n="closet.select_mode">多選</button>
 </div>
@@ -56,8 +65,46 @@
 <!-- Hidden file input the right-click menu drives. Lives outside the
      menu so it survives the menu being hidden between click → file pick. -->
 <input type="file" id="updateImageFile" accept="image/*" style="display:none;" />
+
+<!-- Per-item stats modal — opens on a normal click on any item card.
+     All charts are rendered with Chart.js (loaded from CDN below). -->
+<div id="itemStatsModal" class="modal-overlay" style="display:none;">
+    <div class="modal-card item-stats-modal">
+        <div class="modal-head">
+            <h3 id="isHeader" data-i18n="closet.item_stats_title">衣物統計</h3>
+            <button class="modal-close" id="isClose">×</button>
+        </div>
+        <div id="isBody"><!-- filled by JS --></div>
+    </div>
+</div>
+
+<style>
+.item-stats-modal { max-width: 640px; max-height: 88vh; overflow-y: auto; }
+.is-header-row {
+    display: flex; gap: 12px; align-items: center; margin-bottom: 14px;
+    padding-bottom: 12px; border-bottom: 1px solid #eee;
+}
+.is-header-row img {
+    width: 80px; height: 80px; object-fit: cover; border-radius: 8px;
+    background: #f5f5f5; flex-shrink: 0;
+}
+.is-header-meta { flex: 1; min-width: 0; }
+.is-header-meta .is-name { font-size: 18px; font-weight: 600; color: #1a1a1a; }
+.is-header-meta .is-tags { font-size: 12px; color: #777; margin-top: 4px; }
+.is-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+.is-tile { background: #f5f5f5; border-radius: 8px; padding: 10px 8px; text-align: center; }
+.is-tile-num { font-size: 22px; font-weight: 700; color: #11856B; line-height: 1.0; }
+.is-tile-label { font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+.is-section h4 { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin: 16px 0 8px; }
+/* Each chart lives inside a fixed-height wrapper div so Chart.js (which
+   runs with maintainAspectRatio:false) has an explicit pixel height to
+   fill — without this the canvas can collapse to 0px and look empty. */
+.is-chart-box { position: relative; height: 220px; width: 100%; }
+</style>
 {% endblock %}
 {% block scripts %}
+<!-- Chart.js — used by the per-item stats modal -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 const ctxMenu  = document.getElementById('ctxMenu');
 const grid     = document.getElementById('grid');
@@ -84,12 +131,24 @@ function cleanlinessBadge(it) {
     return {label: `0/${wpw}`, cls: 'badge-clean', tip: 'clean'};
 }
 
-// ─── Build dropdown options dynamically from item data ─────────────────
+// Master copy of EVERY active item, fetched once on page load. Used to
+// build the color / material dropdowns so the option set doesn't shrink
+// when the user applies a filter (otherwise picking 'cashmere' would
+// drop every other material from the dropdown).
+let allItemsMaster = [];
+
+// ─── Build dropdown options from the unfiltered master list ──────────
 function populateDropdowns(items) {
     const colorSet = new Set(), matSet = new Set();
     for (const it of items) {
         for (const c of (it.colors || [])) colorSet.add(c.toLowerCase());
+        // Primary material (mirrored from composition)
         if (it.material) matSet.add(it.material.toLowerCase());
+        // Blend partners — so spandex / cashmere / etc. that only appear
+        // as secondary in compositions still surface as filter options.
+        for (const c of (it.composition || [])) {
+            if (c && c.material) matSet.add(String(c.material).toLowerCase());
+        }
     }
     const colorSel = document.getElementById('colorFilter');
     const matSel   = document.getElementById('materialFilter');
@@ -121,6 +180,14 @@ function populateDropdowns(items) {
     matSel.value   = prevMat;
 }
 
+// Fetch every active item once and use it to populate the dropdowns.
+// Re-called only when items are added / edited / deleted (not on filter).
+async function loadMaster() {
+    const res = await fetch('/items/');
+    allItemsMaster = await res.json();
+    populateDropdowns(allItemsMaster);
+}
+
 // ─── Load + render ─────────────────────────────────────────────────────
 async function loadItems() {
     const params = new URLSearchParams();
@@ -135,7 +202,8 @@ async function loadItems() {
     const url = '/items/' + (params.toString() ? '?' + params : '');
     const res = await fetch(url);
     allItems = await res.json();
-    populateDropdowns(allItems);
+    // Dropdown options come from the master list — don't shrink them on filter.
+    if (allItemsMaster.length === 0) populateDropdowns(allItems);
     renderGrid();
     // Filter changes shift which items are "visible" → the Select-all button
     // label depends on whether everything visible is selected, so refresh it.
@@ -153,9 +221,25 @@ function formatComposition(it) {
     return it.material || '—';
 }
 
+// ─── Client-side sort ────────────────────────────────────────────────
+// Re-order the cards in place when the user picks a sort mode. Each
+// comparator returns descending order; "name" / "worn_asc" invert as needed.
+const CLOSET_SORTS = {
+    recent:    (a, b) => (b.id ?? 0) - (a.id ?? 0),
+    name:      (a, b) => String(a.name || '').localeCompare(String(b.name || '')),
+    worn_desc: (a, b) => (b.worn_count       ?? 0) - (a.worn_count       ?? 0),
+    worn_asc:  (a, b) => (a.worn_count       ?? 0) - (b.worn_count       ?? 0),
+    // Items without a rating sink to the bottom (treated as -1).
+    rating:    (a, b) => (b.average_rating   ?? -1) - (a.average_rating   ?? -1),
+    coverage:  (a, b) => (b.coverage_count   ?? 0) - (a.coverage_count   ?? 0),
+};
+
 function renderGrid() {
     grid.innerHTML = '';
-    for (const it of allItems) {
+    const mode = document.getElementById('sortMode')?.value || 'recent';
+    const cmp  = CLOSET_SORTS[mode] || CLOSET_SORTS.recent;
+    const sorted = [...allItems].sort(cmp);
+    for (const it of sorted) {
         const card = document.createElement('div');
         card.className = 'card' + (selected.has(it.id) ? ' card-selected' : '');
         card.dataset.itemId = it.id;
@@ -182,13 +266,20 @@ function renderGrid() {
         `;
         const target = { id: it.id, name: it.name, item: it };
 
-        // In laundry mode, click toggles selection. Otherwise right-click opens menu.
+        // In laundry mode, click toggles selection. Otherwise:
+        //   - normal click → open per-item stats modal
+        //   - right-click / long-press → action menu (existing)
         if (laundryMode) {
             card.addEventListener('click', (e) => {
                 e.stopPropagation();
                 toggleSelect(it.id);
             });
         } else {
+            card.addEventListener('click', (e) => {
+                // Don't trigger if user happens to be selecting text inside the card
+                if (window.getSelection && window.getSelection().toString()) return;
+                openItemStats(it.id);
+            });
             card.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 showMenu(e.clientX, e.clientY, target);
@@ -609,19 +700,201 @@ function attachLongPress(card, target) {
 }
 
 // ─── Filters ──────────────────────────────────────────────────────────
+// Filters re-fetch from the server (the server applies filters in SQL).
 ['categoryFilter', 'colorFilter', 'materialFilter', 'stateFilter'].forEach(id => {
     document.getElementById(id).addEventListener('change', loadItems);
 });
-document.getElementById('refreshBtn').addEventListener('click', loadItems);
+// Sort just re-renders the cached `allItems` — no server round-trip.
+document.getElementById('sortMode').addEventListener('change', renderGrid);
+document.getElementById('refreshBtn').addEventListener('click', async () => {
+    // Hard refresh — items may have been edited/deleted; re-pull master too.
+    await loadMaster();
+    await loadItems();
+});
 
-loadItems();
+// Initial boot: master first (for the dropdowns), then the (possibly filtered) grid.
+(async () => {
+    await loadMaster();
+    await loadItems();
+})();
 // On language switch: re-localize the filter dropdowns ("All colors" etc.)
 // AND re-render cards. Dropdowns aren't picked up by applyTranslations()
 // because populateDropdowns() rebuilds them dynamically.
 window.onLanguageChange = () => {
-    populateDropdowns(allItems);
+    populateDropdowns(allItemsMaster.length ? allItemsMaster : allItems);
     renderGrid();
     if (laundryMode) updateLaundryBar();  // refresh Select-all / Mark-dirty button text too
 };
+
+// ─── Per-item stats modal ─────────────────────────────────────────────
+// Track active Chart.js instances so we can destroy them between opens
+// (prevents canvas-reuse bugs when opening different items in succession).
+let _isCharts = [];
+function _disposeCharts() {
+    _isCharts.forEach(c => { try { c.destroy(); } catch(_) {} });
+    _isCharts = [];
+}
+
+async function openItemStats(itemId) {
+    const r = await fetch(`/items/${itemId}/stats`);
+    if (!r.ok) {
+        showToast('failed to load stats');
+        return;
+    }
+    const data = await r.json();
+    const h = data.headline;
+
+    // Header — image, name, category, state
+    const imgSrc = h.image_path ? `/images/${h.image_path.split('/').pop()}` : '';
+    const stateBadge = h.state ? `<span class="cleanliness-badge ${h.state}">${h.state}</span>` : '';
+
+    document.getElementById('isHeader').textContent = h.name;
+
+    const tile = (num, label) =>
+        `<div class="is-tile">
+            <div class="is-tile-num">${num ?? '—'}</div>
+            <div class="is-tile-label">${label}</div>
+        </div>`;
+
+    const compositionBlock = data.composition
+        ? `<div class="is-section"><h4>Composition</h4><div class="is-chart-box"><canvas id="isComp"></canvas></div></div>`
+        : '';
+
+    document.getElementById('isBody').innerHTML = `
+        <div class="is-header-row">
+            ${imgSrc ? `<img src="${imgSrc}" alt="">` : ''}
+            <div class="is-header-meta">
+                <div class="is-name">${h.name}</div>
+                <div class="is-tags">${h.category ?? ''} ${stateBadge}</div>
+            </div>
+        </div>
+        <div class="is-tiles">
+            ${tile(h.worn_count, 'total worn')}
+            ${tile(h.coverage_count, 'in outfits')}
+            ${tile(h.average_rating !== null && h.average_rating !== undefined ? h.average_rating.toFixed(1) : '—', 'avg rating')}
+            ${tile(h.days_since_worn, 'days since worn')}
+        </div>
+        <div class="is-section"><h4>Wear timeline (last 13 weeks)</h4><div class="is-chart-box"><canvas id="isTimeline"></canvas></div></div>
+        <div class="is-section"><h4>Often paired with</h4><div class="is-chart-box" id="isCoocBox"><canvas id="isCooc"></canvas></div></div>
+        ${compositionBlock}
+    `;
+
+    // Show modal first so canvases get sized; render charts after a paint
+    document.getElementById('itemStatsModal').style.display = 'flex';
+    requestAnimationFrame(() => {
+        _disposeCharts();
+
+        // Wear / coverage counts are always whole numbers — force integer
+        // ticks so the y-axis doesn't show 0.0 / 0.1 / 0.2 fractional steps
+        // when the actual values are tiny (0 or 1 wear events per week).
+        const baseOpts = {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: '#666', font: { size: 10 } } },
+                y: {
+                    grid: { color: '#eee' },
+                    ticks: { color: '#666', precision: 0, stepSize: 1 },
+                    beginAtZero: true,
+                },
+            },
+        };
+
+        // Wear timeline — line chart over weeks. Each tick = one week, so
+        // the natural ceiling per bucket is 7 (worn at most once per day).
+        // Hard-capping the y-axis at 7 keeps the chart readable when most
+        // weeks have 0–2 wears (otherwise a single 3-wear week would
+        // squash the rest of the line).
+        _isCharts.push(new Chart(document.getElementById('isTimeline'), {
+            type: 'line',
+            data: {
+                labels: data.timeline.labels.map(d => d.slice(5)),  // MM-DD
+                datasets: [{
+                    data: data.timeline.values,
+                    borderColor: '#11856B', backgroundColor: 'rgba(17,133,107,0.15)',
+                    fill: true, tension: 0.25, pointRadius: 3,
+                }],
+            },
+            options: {
+                ...baseOpts,
+                scales: {
+                    ...baseOpts.scales,
+                    y: { ...baseOpts.scales.y, max: 7 },
+                },
+            },
+        }));
+
+        // Co-occurrence — horizontal bar.
+        // We DON'T spread baseOpts here: with indexAxis:'y' the value
+        // and category axes swap, so we configure scales explicitly to
+        // avoid the "0–1 default range with no bars" failure mode.
+        if (data.co_occurrence.labels.length > 0) {
+            _isCharts.push(new Chart(document.getElementById('isCooc'), {
+                type: 'bar',
+                data: {
+                    labels: data.co_occurrence.labels,
+                    datasets: [{
+                        data: data.co_occurrence.values,
+                        backgroundColor: '#E8B4BC',
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: { color: '#eee' },
+                            // co-occurrence counts are integers — clamp ticks
+                            ticks: { color: '#666', precision: 0 },
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: '#666', font: { size: 11 } },
+                        },
+                    },
+                },
+            }));
+        } else {
+            document.getElementById('isCooc').replaceWith(
+                Object.assign(document.createElement('div'), {
+                    className: 'tags',
+                    style: 'color:#999;padding:8px;',
+                    textContent: 'Not yet paired in any outfit.',
+                })
+            );
+        }
+
+        // Composition — doughnut (only if present)
+        if (data.composition) {
+            _isCharts.push(new Chart(document.getElementById('isComp'), {
+                type: 'doughnut',
+                data: {
+                    labels: data.composition.labels,
+                    datasets: [{
+                        data: data.composition.values,
+                        backgroundColor: ['#11856B', '#E8B4BC', '#6B8E80', '#B85042', '#A7BEAE', '#F0C987'],
+                    }],
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right' } },
+                },
+            }));
+        }
+    });
+}
+
+function closeItemStats() {
+    document.getElementById('itemStatsModal').style.display = 'none';
+    _disposeCharts();
+}
+document.getElementById('isClose').addEventListener('click', closeItemStats);
+document.getElementById('itemStatsModal').addEventListener('click', (e) => {
+    // Click on the dimmed backdrop (but not inside the card) closes the modal
+    if (e.target.id === 'itemStatsModal') closeItemStats();
+});
 </script>
 {% endblock %}

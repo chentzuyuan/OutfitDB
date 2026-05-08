@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title_key %}page.title.stats{% endblock %}
+{% block title %}{{ brand.app_name }} · Closet stats{% endblock %}
+{% block content %}
+<h1 data-i18n="stats.title">Closet stats</h1>
+<p class="muted" data-i18n="stats.subtitle">A live view into the 13-table schema. Numbers are queried from the database every page load — no precomputation.</p>
+
+<!-- Headline tiles ─ quick KPI summary at the top of the page -->
+<div class="stats-tiles" id="statsTiles"></div>
+
+<!-- Export style pack ─ a single button right under the tiles so visitors
+     can take the trained model home as a .odstyle file (slide 4 in the deck). -->
+<div class="stats-export">
+    <a class="btn primary" href="/style/export" download>
+        <span data-i18n="stats.export_btn">Export my style (.odstyle)</span>
+    </a>
+    <span class="export-hint muted" data-i18n="stats.export_hint">
+        Download the trained classifiers as a portable file. Anyone can import this into their own closet.
+    </span>
+</div>
+
+<div class="stats-grid">
+    <section class="stats-card">
+        <h2 data-i18n="stats.category">Items by category</h2>
+        <canvas id="categoryChart"></canvas>
+    </section>
+
+    <section class="stats-card">
+        <h2 data-i18n="stats.color">Top 10 colors</h2>
+        <canvas id="colorChart"></canvas>
+    </section>
+
+    <section class="stats-card">
+        <h2 data-i18n="stats.material">Top 10 materials</h2>
+        <canvas id="materialChart"></canvas>
+    </section>
+
+    <section class="stats-card">
+        <h2 data-i18n="stats.rating">Aesthetic rating distribution</h2>
+        <canvas id="ratingChart"></canvas>
+    </section>
+
+    <section class="stats-card stats-wide">
+        <h2 data-i18n="stats.wear">Most-worn items (top 10)</h2>
+        <canvas id="wearChart"></canvas>
+    </section>
+
+    <section class="stats-card stats-wide">
+        <h2 data-i18n="stats.coverage">Most-recommended items (coverage_count, top 10)</h2>
+        <canvas id="coverageChart"></canvas>
+    </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(async () => {
+    // Pull every chart series in one round-trip — keeps the page snappy
+    const r = await fetch('/stats/charts');
+    if (!r.ok) {
+        document.getElementById('statsTiles').textContent = 'Failed to load stats.';
+        return;
+    }
+    const data = await r.json();
+
+    // ── Headline KPI tiles ─────────────────────────────────────────
+    const tiles = document.getElementById('statsTiles');
+    const t = data.headline;
+    const labels = [
+        ['Items',           t.total_items,        'items'],
+        ['Outfits',         t.total_outfits,      'outfits'],
+        ['Aesthetic ratings', t.total_ratings,    'ratings'],
+        ['Temp ratings',    t.total_temp_ratings, 'temp'],
+        ['Occasion ratings',t.total_occ_ratings,  'occ'],
+    ];
+    tiles.innerHTML = labels.map(([label, n, key]) =>
+        `<div class="stats-tile" data-key="${key}">
+            <div class="stats-tile-num">${n}</div>
+            <div class="stats-tile-label">${label}</div>
+        </div>`
+    ).join('');
+
+    // Shared color palette tuned to the brand greens + warm accents.
+    // Two ramps: one for ordered/ordinal data, one for categorical.
+    const ORDINAL = ['#11856B','#3DA189','#69BCA8','#95D7C7','#C2F2E5'];
+    const CAT     = ['#11856B','#E8B4BC','#6B8E80','#B85042','#A7BEAE','#F0C987','#7A6F65','#C2F2E5','#E07A5F','#3D5A80'];
+
+    // Tiny helper — every chart shares the same minimal axis styling.
+    // All counts in this dashboard are integers, so ticks force precision:0
+    // to avoid Chart.js auto-inserting fractional steps (0.0 / 0.1 / …)
+    // when the data range is small.
+    function baseOpts() {
+        return {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: { backgroundColor: '#1a1a1a' },
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#555', precision: 0 },
+                },
+                y: {
+                    grid: { color: '#eee' },
+                    ticks: { color: '#555', precision: 0 },
+                    beginAtZero: true,
+                },
+            },
+        };
+    }
+
+    // 1. Category — doughnut so the breakdown is read at a glance
+    new Chart(document.getElementById('categoryChart'), {
+        type: 'doughnut',
+        data: {
+            labels: data.category.labels,
+            datasets: [{ data: data.category.values, backgroundColor: CAT }],
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'right' } },
+        },
+    });
+
+    // 2. Top colors — horizontal bars
+    new Chart(document.getElementById('colorChart'), {
+        type: 'bar',
+        data: {
+            labels: data.color.labels,
+            datasets: [{ data: data.color.values, backgroundColor: '#11856B' }],
+        },
+        options: { ...baseOpts(), indexAxis: 'y' },
+    });
+
+    // 3. Top materials — horizontal bars
+    new Chart(document.getElementById('materialChart'), {
+        type: 'bar',
+        data: {
+            labels: data.material.labels,
+            datasets: [{ data: data.material.values, backgroundColor: '#6B8E80' }],
+        },
+        options: { ...baseOpts(), indexAxis: 'y' },
+    });
+
+    // 4. Rating buckets — vertical bars in 4 colors (red→green ramp)
+    new Chart(document.getElementById('ratingChart'), {
+        type: 'bar',
+        data: {
+            labels: data.rating.labels,
+            datasets: [{
+                data: data.rating.values,
+                backgroundColor: ['#B85042','#A7A7A7','#69BCA8','#11856B'],
+            }],
+        },
+        options: baseOpts(),
+    });
+
+    // 5. Wear count top-10 — vertical bars
+    new Chart(document.getElementById('wearChart'), {
+        type: 'bar',
+        data: {
+            labels: data.wear.labels,
+            datasets: [{ data: data.wear.values, backgroundColor: '#11856B' }],
+        },
+        options: baseOpts(),
+    });
+
+    // 6. Coverage count top-10 — vertical bars
+    new Chart(document.getElementById('coverageChart'), {
+        type: 'bar',
+        data: {
+            labels: data.coverage.labels,
+            datasets: [{ data: data.coverage.values, backgroundColor: '#E8B4BC' }],
+        },
+        options: baseOpts(),
+    });
+})();
+</script>
+
+<style>
+.stats-tiles {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin: 16px 0 14px;
+}
+.stats-tile {
+    background: #fff;
+    border: 1px solid #e8e8e0;
+    border-radius: 10px;
+    padding: 14px 12px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.stats-tile-num { font-size: 28px; font-weight: 700; color: #11856B; line-height: 1.1; }
+.stats-tile-label { font-size: 11px; color: #777; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+.stats-export {
+    margin: 8px 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+.export-hint { font-size: 12px; color: #777; }
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+.stats-card {
+    background: #fff;
+    border: 1px solid #e8e8e0;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.stats-card h2 {
+    margin: 0 0 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #444;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.stats-wide { grid-column: 1 / -1; }
+@media (max-width: 720px) {
+    .stats-tiles { grid-template-columns: repeat(2, 1fr); }
+    .stats-grid  { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}

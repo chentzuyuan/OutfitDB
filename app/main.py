@@ -80,6 +80,14 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 import json as _json
 templates.env.globals["brand"] = branding.jinja_globals()
 templates.env.globals["brand_js_json"] = _json.dumps(branding.js_globals())
+# App context — version + whether we're running as the public web demo.
+# Server-rendered so the page doesn't need to fetch /version on every load
+# (update checks are manual via the settings page).
+from .version import is_web_demo as _is_web_demo  # noqa: E402
+templates.env.globals["app"] = {
+    "version": APP_VERSION,
+    "is_web_demo": _is_web_demo(),
+}
 
 
 app.include_router(setup.router)
@@ -183,6 +191,11 @@ def recommend_page(request: Request):
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
     return templates.TemplateResponse("settings.html", {"request": request})
+
+
+@app.get("/stats", response_class=HTMLResponse)
+def stats_page(request: Request):
+    return templates.TemplateResponse("stats.html", {"request": request})
 
 
 @app.get("/healthz")
